@@ -16,7 +16,7 @@ const categories = [
 
 // Default route for root URL
 app.get('/', (req, res) => {
-    res.send('Welcome to CartButler API!');
+    res.send('Welcome to CartButler Application!');
 });
 
 // GET - List all categories
