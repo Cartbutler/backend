@@ -1,0 +1,7 @@
+runtime: nodejs14
+
+env_variables:
+  DB_HOST: '104.197.180.231'
+  DB_USER: 'cartbutler8946'
+  DB_PASSWORD: 'conestoga8946'
+  DB_NAME: 'cartbutler8946'
