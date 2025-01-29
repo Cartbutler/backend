@@ -29,3 +29,9 @@
 # Node modules
 node_modules/
 node_modules/.package-lock.json
+
+# Google Cloud ignore file
+.gcloudignore
+
+# Git attributes
+.gitattributes
