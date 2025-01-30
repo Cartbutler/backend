@@ -17,6 +17,30 @@ app.get('/categories', async (req, res) => {
     }
 });
 
+// Product suggestions endpoint
+app.get('/suggestions', async (req, res) => {
+    try {
+        const { query } = req.query; // Get parameter
+
+        if (!query) {
+            return res.status(400).json({ error: 'Query parameter is required' });
+        }
+
+        const pSuggestions = await prisma.pSuggestions.findMany({
+            where: {
+                name: {
+                    contains: query, // Filter products
+                    mode: 'insensitive' // case-insensitive
+                }
+            }
+        });
+
+        res.json(pSuggestions);
+    } catch (err) {
+        res.status(500).json({ error: 'Database query error' });
+    }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
