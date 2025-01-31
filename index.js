@@ -17,22 +17,32 @@ app.get('/categories', async (req, res) => {
     }
 });
 
-// Product suggestions endpoint
+// Product suggestions endpoint with multi-word search support
 app.get('/suggestions', async (req, res) => {
     try {
-        const { query } = req.query; // Get parameter
+        const { query } = req.query; // Get query parameter
 
         if (!query) {
             return res.status(400).json({ error: 'Query parameter is required' });
         }
 
+        const searchTerms = query.split(/\s+/); // Format to split with whitespace
+
+        const conditions = searchTerms.map(term => ({
+            name: {
+                contains: term,
+                mode: 'insensitive' // case-insensitive
+            }
+        }));
+
         const pSuggestions = await prisma.pSuggestions.findMany({
             where: {
-                name: {
-                    contains: query, // Filter products
-                    mode: 'insensitive' // case-insensitive
-                }
-            }
+                AND: conditions // Ensure all words are matched
+            },
+            orderBy: {
+                priority: 'desc' // Sorting by priority
+            },
+            take: 5 // Limit results
         });
 
         res.json(pSuggestions);
