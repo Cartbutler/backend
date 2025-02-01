@@ -1,5 +1,8 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -7,7 +10,36 @@ app.use(express.json());
 
 const prisma = new PrismaClient();
 
-// GET - List all categories
+// Ensure the uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+
+// Set up multer for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage: storage });
+
+// Serve static files from the "uploads" directory
+app.use('/uploads', express.static('uploads'));
+
+// Endpoint to upload an image
+app.post('/upload', upload.single('image'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+    res.json({ url: `/uploads/${req.file.filename}` });
+});
+
+// Example endpoint to list all categories
 app.get('/categories', async (req, res) => {
     try {
         const categories = await prisma.category.findMany();
@@ -37,7 +69,7 @@ app.get('/suggestions', async (req, res) => {
 
         const pSuggestions = await prisma.pSuggestions.findMany({
             where: {
-                AND: conditions // Ensure all words are matched
+                OR: conditions
             },
             orderBy: {
                 priority: 'desc' // Sorting by priority
