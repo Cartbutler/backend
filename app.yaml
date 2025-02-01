@@ -1,4 +1,4 @@
-runtime: nodejs14
+runtime: nodejs20
 
 env_variables:
   DB_HOST: '104.197.180.231'
