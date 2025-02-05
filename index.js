@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
@@ -5,21 +7,22 @@ const path = require('path');
 const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 5000;
+const host = 'localhost'; // Bind to localhost
 
 app.use(express.json());
 
 const prisma = new PrismaClient();
 
 // Ensure the uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join('/tmp', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir);
+    fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Set up multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/');
+        cb(null, uploadsDir);
     },
     filename: (req, file, cb) => {
         cb(null, Date.now() + path.extname(file.originalname));
@@ -29,7 +32,12 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Serve static files from the "uploads" directory
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(uploadsDir));
+
+// Root route
+app.get('/', (req, res) => {
+    res.send('Welcome to the CartButler API this screen is just a landing page');
+});
 
 // Endpoint to upload an image
 app.post('/upload', upload.single('image'), (req, res) => {
@@ -42,10 +50,11 @@ app.post('/upload', upload.single('image'), (req, res) => {
 // Example endpoint to list all categories
 app.get('/categories', async (req, res) => {
     try {
-        const categories = await prisma.category.findMany();
+        const categories = await prisma.categories.findMany();
         res.json(categories);
     } catch (err) {
-        res.status(500).json({ error: 'Database query error' });
+        console.error('Database query error:', err.message);
+        res.status(500).json({ error: 'Database query error', details: err.message });
     }
 });
 
@@ -62,8 +71,7 @@ app.get('/suggestions', async (req, res) => {
 
         const conditions = searchTerms.map(term => ({
             name: {
-                contains: term,
-                mode: 'insensitive' // case-insensitive
+                contains: term.toLowerCase()
             }
         }));
 
@@ -79,7 +87,8 @@ app.get('/suggestions', async (req, res) => {
 
         res.json(pSuggestions);
     } catch (err) {
-        res.status(500).json({ error: 'Database query error' });
+        console.error('Database query error:', err.message);
+        res.status(500).json({ error: 'Database query error', details: err.message });
     }
 });
 
@@ -89,7 +98,6 @@ app.use((err, req, res, next) => {
     res.status(500).send('Something broke!');
 });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+app.listen(port, host, () => {
+    console.log(`Server is running on http://${host}:${port}`);
 });

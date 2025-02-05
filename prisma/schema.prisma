@@ -1,22 +1,19 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-model Category {
+model categories {
   category_id   Int      @id @default(autoincrement())
   category_name String   @unique
-  products      Product[]
+  products      products[]
 }
 
-model Product {
+model products {
   product_id   Int      @id @default(autoincrement())
   product_name String
   description  String
@@ -25,10 +22,10 @@ model Product {
   category_id  Int
   image_path   String
   created_at   DateTime @default(now())
-  category     Category @relation(fields: [category_id], references: [category_id])
+  category     categories @relation(fields: [category_id], references: [category_id])
 }
 
-model Customer {
+model customers {
   customers_id Int      @id @default(autoincrement())
   first_name   String
   last_name    String
@@ -37,10 +34,10 @@ model Customer {
   address      String
   premium_rank Int
   date_joined  DateTime @default(now())
-  orders       Order[]
+  orders       orders[]
 }
 
-model GroceryStore {
+model grocery_stores {
   store_id    Int      @id @default(autoincrement())
   store_name  String
   address     String
@@ -48,7 +45,7 @@ model GroceryStore {
   date_joined DateTime @default(now())
 }
 
-model Employee {
+model employees {
   e_id    Int      @id @default(autoincrement())
   name    String
   f_name  String
@@ -57,17 +54,23 @@ model Employee {
   phone   String
 }
 
-model DBUser {
+model db_users {
   user_id  Int      @id @default(autoincrement())
   username String   @unique
   password String
 }
 
-model Order {
+model orders {
   order_id       Int      @id @default(autoincrement())
   customer_id    Int
   order_status   String
   order_day      DateTime
   payment_method String
-  customer       Customer @relation(fields: [customer_id], references: [customers_id])
+  customer       customers @relation(fields: [customer_id], references: [customers_id])
+}
+
+model pSuggestions {
+  id        Int      @id @default(autoincrement())
+  name      String
+  priority  Int
 }
