@@ -18,41 +18,57 @@ CartButler API is a Node.js application that provides various endpoints for mana
    cd CartButler
    ```
 2. Install the dependecies:
-```npm install```
+```sh
+npm install
+```
 
-3. Set up the environment variables: 
+4. Set up the environment variables: 
 Create a .env file in the root directory and add the following:
-```DATABASE_URL=mysql://cartbutler8946:conestoga8946@104.197.180.231:3306/cartbutler8946```
-4. Run the Prisma migrations:
-```npx prisma migrate dev```
+```sh
+DATABASE_URL=mysql://cartbutler8946:conestoga8946@104.197.180.231:3306/cartbutler8946
+```
+6. Run the Prisma migrations:
+```sh
+npx prisma migrate dev
+```
 
 # Usage
 1. Start the server:
-```node index.js```
-2. The server will be running at http://localhost:5000.
+```sh
+node index.js
+```
+3. The server will be running at http://localhost:5000.
 
 # Endpoints
 Root Route
 GET /
 Returns a welcome message.
-```curl http://localhost:5000/```
+```sh
+curl http://localhost:5000/
+```
 
 Upload an Image
 POST /upload
 
 Uploads an image file.
-```curl -X POST -F "image=@/path/to/your/image.jpg" http://localhost:5000/upload```
+```sh
+curl -X POST -F "image=@/path/to/your/image.jpg" http://localhost:5000/upload
+```
 
 List All Categories
 GET /categories
 Returns a list of all categories.
 
-```curl http://localhost:5000/categories```
+```sh
+curl http://localhost:5000/categories
+```
 
 Product Suggestions
 GET /suggestions
 Returns product suggestions based on a query parameter.
-```curl http://localhost:5000/suggestions?query=example```
+```sh
+curl http://localhost:5000/suggestions?query=example
+```
 
 # Environment Variables
 The following environment variables need to be set in the .env file:
