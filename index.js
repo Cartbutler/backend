@@ -1,6 +1,6 @@
 require('dotenv').config();
+
 const express = require('express');
-const cors = require('cors'); // Import the cors package
 const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const path = require('path');
@@ -10,7 +10,6 @@ const port = process.env.PORT || 5000;
 const host = 'localhost'; // Bind to localhost
 
 app.use(express.json());
-app.use(cors()); // Enable CORS for all routes
 
 const prisma = new PrismaClient();
 
@@ -87,40 +86,6 @@ app.get('/suggestions', async (req, res) => {
         });
 
         res.json(pSuggestions);
-    } catch (err) {
-        console.error('Database query error:', err.message);
-        res.status(500).json({ error: 'Database query error', details: err.message });
-    }
-});
-
-// Search endpoint to search for products
-app.get('/search', async (req, res) => {
-    try {
-        const { query } = req.query; // Get query parameter
-
-        if (!query) {
-            return res.status(400).json({ error: 'Query parameter is required' });
-        }
-
-        const searchTerms = query.split(/\s+/); // Split query into search terms
-
-        const conditions = searchTerms.map(term => ({
-            product_name: {
-                contains: term.toLowerCase()
-            }
-        }));
-
-        const products = await prisma.products.findMany({
-            where: {
-                OR: conditions
-            },
-            orderBy: {
-                created_at: 'desc' // Sorting by creation date
-            },
-            take: 10 // Limit results
-        });
-
-        res.json(products);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
