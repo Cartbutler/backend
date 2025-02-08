@@ -23,7 +23,7 @@ npm install
 ```
 
 4. Set up the environment variables: 
-Create a .env file in the root directory and add the following:
+- Create a .env file in the root directory and add the following:
 ```sh
 DATABASE_URL=mysql://cartbutler8946:conestoga8946@104.197.180.231:3306/cartbutler8946
 ```
@@ -40,37 +40,45 @@ node index.js
 3. The server will be running at http://localhost:5000.
 
 # Endpoints
-Root Route
+- Root Route
 GET /
 Returns a welcome message.
 ```sh
 curl http://localhost:5000/
 ```
 
-Upload an Image
-POST /upload
+## Upload an Image
+- POST /upload
 
-Uploads an image file.
+- Uploads an image file.
 ```sh
 curl -X POST -F "image=@/path/to/your/image.jpg" http://localhost:5000/upload
 ```
 
-List All Categories
-GET /categories
-Returns a list of all categories.
+## List All Categories
+- GET /categories
+- Returns a list of all categories.
 
 ```sh
 curl http://localhost:5000/categories
 ```
 
-Product Suggestions
-GET /suggestions
-Returns product suggestions based on a query parameter.
+## Product Suggestions
+- GET /suggestions
+- Returns product suggestions based on a query parameter.
 ```sh
 curl http://localhost:5000/suggestions?query=example
+```
+
+## Search Products
+- GET /search
+
+- Searches for products based on a query parameter.
+```sh
+curl http://localhost:5000/search?query=example
 ```
 
 # Environment Variables
 The following environment variables need to be set in the .env file:
 
-DATABASE_URL: The connection string for the database.
+- DATABASE_URL: The connection string for the database.
