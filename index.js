@@ -96,23 +96,34 @@ app.get('/suggestions', async (req, res) => {
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
-        const { query } = req.query; // Get query parameter
+        const { query, categoryID } = req.query; // Get query and categoryID parameters
 
-        if (!query) {
-            return res.status(400).json({ error: 'Query parameter is required' });
+        if (!query && !categoryID) {
+            return res.status(400).json({ error: 'At least one of query or categoryID parameter is required' });
         }
 
-        const searchTerms = query.split(/\s+/); // Split query into search terms
+        const searchConditions = [];
 
-        const conditions = searchTerms.map(term => ({
-            product_name: {
-                contains: term.toLowerCase()
-            }
-        }));
+        if (query) {
+            const searchTerms = query.split(/\s+/); // Split query into search terms
+            searchTerms.forEach(term => {
+                searchConditions.push({
+                    product_name: {
+                        contains: term.toLowerCase()
+                    }
+                });
+            });
+        }
+
+        if (categoryID) {
+            searchConditions.push({
+                category_id: parseInt(categoryID, 10)
+            });
+        }
 
         const products = await prisma.products.findMany({
             where: {
-                OR: conditions
+                OR: searchConditions
             },
             orderBy: {
                 created_at: 'desc' // Sorting by creation date
@@ -126,6 +137,7 @@ app.get('/search', async (req, res) => {
         res.status(500).json({ error: 'Database query error', details: err.message });
     }
 });
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
