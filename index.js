@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { Storage } = require('@google-cloud/storage');
 const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
+const sharp = require('sharp');
 const app = express();
 const port = process.env.PORT || 5000;
 const host = 'localhost'; // Bind to localhost
@@ -38,7 +39,7 @@ async function accessSecretVersion() {
 accessSecretVersion().then(() => {
     // Set up Google Cloud Storage
     const storage = new Storage();
-    const bucketName = 'your-bucket-name'; // Replace with your bucket name
+    const bucketName = 'southern-shard-449119-d4.appspot.com';
     const bucket = storage.bucket(bucketName);
 
     // Set up multer for file uploads
@@ -59,22 +60,55 @@ accessSecretVersion().then(() => {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        const blob = bucket.file(Date.now() + path.extname(req.file.originalname));
-        const blobStream = blob.createWriteStream({
+        const timestamp = Date.now();
+        const originalFilename = `${timestamp}${path.extname(req.file.originalname)}`;
+        const lowResFilename = `${timestamp}-lowres${path.extname(req.file.originalname)}`;
+
+        const originalBlob = bucket.file(originalFilename);
+        const lowResBlob = bucket.file(lowResFilename);
+
+        const originalBlobStream = originalBlob.createWriteStream({
             resumable: false,
         });
 
-        blobStream.on('error', (err) => {
+        const lowResBlobStream = lowResBlob.createWriteStream({
+            resumable: false,
+        });
+
+        // Handle errors for original image upload
+        originalBlobStream.on('error', (err) => {
             console.error('Upload error:', err);
             res.status(500).json({ error: 'Upload error', details: err.message });
         });
 
-        blobStream.on('finish', () => {
-            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-            res.json({ url: publicUrl });
+        // Handle errors for low-res image upload
+        lowResBlobStream.on('error', (err) => {
+            console.error('Upload error:', err);
+            res.status(500).json({ error: 'Upload error', details: err.message });
         });
 
-        blobStream.end(req.file.buffer);
+        // Finish event for original image upload
+        originalBlobStream.on('finish', () => {
+            const originalUrl = `https://storage.googleapis.com/${bucket.name}/${originalBlob.name}`;
+            const lowResUrl = `https://storage.googleapis.com/${bucket.name}/${lowResBlob.name}`;
+
+            res.json({ originalUrl, lowResUrl });
+        });
+
+        // Resize the image to low resolution and upload both versions
+        sharp(req.file.buffer)
+            .resize(800) // Resize to 800px width for low resolution
+            .toBuffer()
+            .then((lowResBuffer) => {
+                lowResBlobStream.end(lowResBuffer);
+            })
+            .catch((err) => {
+                console.error('Sharp error:', err);
+                res.status(500).json({ error: 'Image processing error', details: err.message });
+            });
+
+        // Upload the original image
+        originalBlobStream.end(req.file.buffer);
     });
 
     // Example endpoint to list all categories
