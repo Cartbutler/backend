@@ -39,7 +39,7 @@ async function accessSecretVersion() {
 accessSecretVersion().then(() => {
     // Set up Google Cloud Storage
     const storage = new Storage();
-    const bucketName = 'southern-shard-449119-d4.appspot.com';
+    const bucketName = 'southern-shard-449119-d4.appspot.com'; // Replace with your actual bucket name
     const bucket = storage.bucket(bucketName);
 
     // Set up multer for file uploads
@@ -145,8 +145,7 @@ accessSecretVersion().then(() => {
                 },
                 orderBy: {
                     priority: 'desc' // Sorting by priority
-                },
-                take: 5 // Limit results
+                }
             });
 
             res.json(pSuggestions);
@@ -190,8 +189,7 @@ accessSecretVersion().then(() => {
                 },
                 orderBy: {
                     created_at: 'desc' // Sorting by creation date
-                },
-                take: 10 // Limit results
+                }
             });
 
             res.json(products);
