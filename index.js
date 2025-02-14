@@ -101,6 +101,8 @@ app.get('/products', async (req, res) => {
             select: {
                 product_name: true,
                 image_path: true,
+                description: true,
+                price: true,
             },
             orderBy: {
                 created_at: 'desc' // Sorting by creation date
@@ -149,6 +151,8 @@ app.get('/search', async (req, res) => {
             select: {
                 product_name: true,
                 image_path: true,
+                description: true,
+                price: true,
             },
             orderBy: {
                 created_at: 'desc' // Sorting by creation date
