@@ -156,8 +156,7 @@ app.get('/search', async (req, res) => {
             },
             orderBy: {
                 created_at: 'desc' // Sorting by creation date
-            },
-            take: 10 // Limit results
+            }
         });
 
         // Fire-and-forget task to resize images asynchronously
