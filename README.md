@@ -51,7 +51,7 @@ CartButler API is a Node.js application that provides various endpoints for mana
   Returns a welcome message.
 
   ```sh
-  curl http://localhost:5000/
+  curl https://southern-shard-449119-d4.nn.r.appspot.com//
   ```
 
 ### List All Categories
@@ -60,7 +60,7 @@ CartButler API is a Node.js application that provides various endpoints for mana
   Returns a list of all categories.
 
   ```sh
-  curl http://localhost:5000/categories
+  curl https://southern-shard-449119-d4.nn.r.appspot.com//categories
   ```
 
 ### Product Suggestions
@@ -69,7 +69,7 @@ CartButler API is a Node.js application that provides various endpoints for mana
   Returns product suggestions based on a query parameter.
 
   ```sh
-  curl http://localhost:5000/suggestions?query=example
+  curl https://southern-shard-449119-d4.nn.r.appspot.com//suggestions?query=example
   ```
 
 ### Search Products
@@ -78,7 +78,7 @@ CartButler API is a Node.js application that provides various endpoints for mana
   Searches for products based on a query or categoryID parameter. At least one of the parameters is required. The endpoint returns products based on the provided parameters, limited to 10 results, and sorted by creation date.
 
   ```sh
-  curl http://localhost:5000/search?query=example&categoryID=1
+  curl https://southern-shard-449119-d4.nn.r.appspot.com//search?query=example&categoryID=1
   ```
 
 ### List All Products
@@ -87,7 +87,7 @@ CartButler API is a Node.js application that provides various endpoints for mana
   Returns a list of all products.
 
   ```sh
-  curl http://localhost:5000/products
+  curl https://southern-shard-449119-d4.nn.r.appspot.com//products
   ```
 
 ## Environment Variables
