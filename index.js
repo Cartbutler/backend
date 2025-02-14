@@ -22,7 +22,7 @@ async function accessSecretVersion() {
     const client = new SecretManagerServiceClient();
     try {
         const [version] = await client.accessSecretVersion({
-            name: process.env.SECRET_NAME,
+            name: 'projects/southern-shard-449119-d4/secrets/service-account-key/versions/latest',
         });
 
         const payload = version.payload.data.toString('utf8');
@@ -39,7 +39,7 @@ async function accessSecretVersion() {
 accessSecretVersion().then(() => {
     // Set up Google Cloud Storage
     const storage = new Storage();
-    const bucketName = process.env.BUCKET_NAME;
+    const bucketName = 'southern-shard-449119-d4.appspot.com'; // Replace with your actual bucket name
     const bucket = storage.bucket(bucketName);
 
     // Set up multer for file uploads
@@ -159,13 +159,13 @@ accessSecretVersion().then(() => {
     app.get('/search', async (req, res) => {
         try {
             const { query, categoryID } = req.query; // Get query and categoryID parameters
-    
+
             if (!query && !categoryID) {
                 return res.status(400).json({ error: 'At least one of query or categoryID parameter is required' });
             }
-    
+
             const searchConditions = [];
-    
+
             if (query) {
                 const searchTerms = query.split(/\s+/); // Split query into search terms
                 searchTerms.forEach(term => {
@@ -176,59 +176,23 @@ accessSecretVersion().then(() => {
                     });
                 });
             }
-    
+
             if (categoryID) {
                 searchConditions.push({
                     category_id: parseInt(categoryID, 10)
                 });
             }
-    
+
             const products = await prisma.products.findMany({
                 where: {
                     OR: searchConditions
                 },
                 orderBy: {
                     created_at: 'desc' // Sorting by creation date
-                },
-                select: {
-                    id: true,
-                    product_name: true,
-                    price: true,
-                    image_url: true,
-                    category_id: true
                 }
             });
-    
-            // Resize images to 160x160 pixels
-            const resizedProducts = await Promise.all(products.map(async (product) => {
-                const originalImageUrl = product.image_url;
-                const imageName = path.basename(originalImageUrl);
-                const resizedImageName = `160x160-${imageName}`;
-                const resizedImageBlob = bucket.file(resizedImageName);
-    
-                // Check if the resized image already exists
-                const [exists] = await resizedImageBlob.exists();
-                if (!exists) {
-                    const originalImageBlob = bucket.file(imageName);
-                    const [originalImageBuffer] = await originalImageBlob.download();
-    
-                    const resizedImageBuffer = await sharp(originalImageBuffer)
-                        .resize(160, 160)
-                        .toBuffer();
-    
-                    await resizedImageBlob.save(resizedImageBuffer, {
-                        resumable: false,
-                    });
-                }
-    
-                const resizedImageUrl = `https://storage.googleapis.com/${bucket.name}/${resizedImageName}`;
-                return {
-                    ...product,
-                    image_url: resizedImageUrl
-                };
-            }));
-    
-            res.json(resizedProducts);
+
+            res.json(products);
         } catch (err) {
             console.error('Database query error:', err.message);
             res.status(500).json({ error: 'Database query error', details: err.message });
