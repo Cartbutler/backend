@@ -149,9 +149,9 @@ app.get('/search', async (req, res) => {
                 OR: searchConditions
             },
             select: {
+                product_id: true,
                 product_name: true,
                 image_path: true,
-                description: true,
                 price: true,
             },
             orderBy: {
