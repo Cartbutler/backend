@@ -94,11 +94,21 @@ app.get('/suggestions', async (req, res) => {
     }
 });
 
-// Products endpoint to display all products
+// Products endpoint to display all products or filter by category_id
 app.get('/products', async (req, res) => {
     try {
+        const { category_id } = req.query; // Get category_id parameter
+
+        const filterConditions = {};
+
+        if (category_id) {
+            filterConditions.category_id = parseInt(category_id, 10);
+        }
+
         const products = await prisma.products.findMany({
+            where: filterConditions,
             select: {
+                product_id: true,
                 product_name: true,
                 image_path: true,
                 description: true,
@@ -127,6 +137,12 @@ app.get('/search', async (req, res) => {
 
         const searchConditions = [];
 
+        if (categoryID) {
+            searchConditions.push({
+                category_id: parseInt(categoryID, 10)
+            });
+        }
+
         if (query) {
             const searchTerms = query.split(/\s+/); // Split query into search terms
             searchTerms.forEach(term => {
@@ -138,15 +154,9 @@ app.get('/search', async (req, res) => {
             });
         }
 
-        if (categoryID) {
-            searchConditions.push({
-                category_id: parseInt(categoryID, 10)
-            });
-        }
-
         const products = await prisma.products.findMany({
             where: {
-                OR: searchConditions
+                AND: searchConditions
             },
             select: {
                 product_id: true,

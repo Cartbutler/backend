@@ -86,13 +86,19 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   curl http://localhost:5000/search?query=example&categoryID=1
   ```
 
-### List All Products
+### List All Products or Filter by Category
 - **GET /products**
 
-  Returns a list of all products.
+  Returns a list of all products or filters products by `category_id` if provided.
 
   ```sh
   curl http://localhost:5000/products
+  ```
+
+  To filter by `category_id`:
+
+  ```sh
+  curl http://localhost:5000/products?category_id=3
   ```
 
 ## Environment Variables
