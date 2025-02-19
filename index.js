@@ -116,6 +116,76 @@ app.get('/products', async (req, res) => {
     }
 });
 
+// Single product endpoint to get product details by ID or query
+app.get('/product', async (req, res) => {
+    try {
+        const { id, query } = req.query; // Get id and query parameters
+
+        if (!id && !query) {
+            return res.status(400).json({ error: 'Either id or query parameter is required' });
+        }
+
+        let product;
+
+        if (id) {
+            product = await prisma.products.findUnique({
+                where: {
+                    product_id: parseInt(id, 10)
+                },
+                include: {
+                    product_store: {
+                        include: {
+                            store: true
+                        }
+                    }
+                }
+            });
+        } else if (query) {
+            product = await prisma.products.findFirst({
+                where: {
+                    product_name: {
+                        contains: query.toLowerCase()
+                    }
+                },
+                include: {
+                    product_store: {
+                        include: {
+                            store: true
+                        }
+                    }
+                }
+            });
+        }
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        // Calculate min and max prices
+        const prices = product.product_store.map(ps => ps.price);
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+
+        // Prepare response data
+        const responseData = {
+            ...product,
+            minPrice,
+            maxPrice,
+            stores: product.product_store.map(ps => ({
+                store_name: ps.store.store_name,
+                store_location: ps.store.store_location,
+                price: ps.price,
+                stock: ps.stock
+            }))
+        };
+
+        res.json(responseData);
+    } catch (err) {
+        console.error('Database query error:', err.message);
+        res.status(500).json({ error: 'Database query error', details: err.message });
+    }
+});
+
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
