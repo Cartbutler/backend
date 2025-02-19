@@ -14,15 +14,17 @@ model categories {
 }
 
 model products {
-  product_id   Int        @id @default(autoincrement())
-  product_name String
-  description  String
-  price        Float
-  stock        Int
-  category_id  Int
-  image_path   String
-  created_at   DateTime   @default(now())
-  category     categories @relation(fields: [category_id], references: [category_id])
+  product_id    Int             @id @default(autoincrement())
+  product_name  String
+  description   String
+  price         Float
+  stock         Int
+  category_id   Int
+  image_path    String
+  created_at    DateTime        @default(now())
+  category_name String?         @db.VarChar(255)
+  product_store product_store[]
+  category      categories      @relation(fields: [category_id], references: [category_id])
 
   @@index([category_id], map: "products_category_id_fkey")
 }
@@ -77,4 +79,24 @@ model pSuggestions {
   id       Int    @id @default(autoincrement())
   name     String
   priority Int
+}
+
+model product_store {
+  product_store_id Int      @id @default(autoincrement())
+  product_id       Int
+  store_id         Int
+  price            Decimal  @db.Decimal(10, 2)
+  stock            Int
+  products         products @relation(fields: [product_id], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "product_store_ibfk_1")
+  stores           stores   @relation(fields: [store_id], references: [store_id], onDelete: NoAction, onUpdate: NoAction, map: "product_store_ibfk_2")
+
+  @@index([product_id], map: "product_id")
+  @@index([store_id], map: "store_id")
+}
+
+model stores {
+  store_id       Int             @id @default(autoincrement())
+  store_name     String          @db.VarChar(255)
+  store_location String          @db.VarChar(255)
+  product_store  product_store[]
 }
