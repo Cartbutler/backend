@@ -8,21 +8,23 @@ datasource db {
 }
 
 model categories {
-  category_id   Int      @id @default(autoincrement())
-  category_name String   @unique
+  category_id   Int        @id @default(autoincrement())
+  category_name String     @unique
   products      products[]
 }
 
 model products {
-  product_id   Int      @id @default(autoincrement())
+  product_id   Int        @id @default(autoincrement())
   product_name String
   description  String
   price        Float
   stock        Int
   category_id  Int
   image_path   String
-  created_at   DateTime @default(now())
+  created_at   DateTime   @default(now())
   category     categories @relation(fields: [category_id], references: [category_id])
+
+  @@index([category_id], map: "products_category_id_fkey")
 }
 
 model customers {
@@ -46,31 +48,33 @@ model grocery_stores {
 }
 
 model employees {
-  e_id    Int      @id @default(autoincrement())
-  name    String
-  f_name  String
-  l_name  String
-  email   String   @unique
-  phone   String
+  e_id   Int    @id @default(autoincrement())
+  name   String
+  f_name String
+  l_name String
+  email  String @unique
+  phone  String
 }
 
 model db_users {
-  user_id  Int      @id @default(autoincrement())
-  username String   @unique
+  user_id  Int    @id @default(autoincrement())
+  username String @unique
   password String
 }
 
 model orders {
-  order_id       Int      @id @default(autoincrement())
+  order_id       Int       @id @default(autoincrement())
   customer_id    Int
   order_status   String
   order_day      DateTime
   payment_method String
   customer       customers @relation(fields: [customer_id], references: [customers_id])
+
+  @@index([customer_id], map: "orders_customer_id_fkey")
 }
 
 model pSuggestions {
-  id        Int      @id @default(autoincrement())
-  name      String
-  priority  Int
+  id       Int    @id @default(autoincrement())
+  name     String
+  priority Int
 }

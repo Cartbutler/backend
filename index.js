@@ -135,7 +135,7 @@ app.get('/product', async (req, res) => {
                 include: {
                     product_store: {
                         include: {
-                            store: true
+                            stores: true
                         }
                     }
                 }
@@ -150,7 +150,7 @@ app.get('/product', async (req, res) => {
                 include: {
                     product_store: {
                         include: {
-                            store: true
+                            stores: true
                         }
                     }
                 }
@@ -172,8 +172,8 @@ app.get('/product', async (req, res) => {
             minPrice,
             maxPrice,
             stores: product.product_store.map(ps => ({
-                store_name: ps.store.store_name,
-                store_location: ps.store.store_location,
+                store_name: ps.stores.store_name,
+                store_location: ps.stores.store_location,
                 price: ps.price,
                 stock: ps.stock
             }))
