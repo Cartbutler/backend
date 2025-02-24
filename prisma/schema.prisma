@@ -24,6 +24,7 @@ model products {
   image_path    String
   created_at    DateTime        @default(now())
   category_name String?         @db.VarChar(255)
+  cartItems     cartItems[]
   product_store product_store[]
   category      categories      @relation(fields: [category_id], references: [category_id])
 
@@ -86,7 +87,7 @@ model product_store {
   product_store_id Int      @id @default(autoincrement())
   product_id       Int
   store_id         Int
-  price            Decimal  @db.Decimal(10, 2)
+  price            Float    @db.Float
   stock            Int
   products         products @relation(fields: [product_id], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "product_store_ibfk_1")
   stores           stores   @relation(fields: [store_id], references: [store_id], onDelete: NoAction, onUpdate: NoAction, map: "product_store_ibfk_2")
@@ -100,4 +101,31 @@ model stores {
   store_name     String          @db.VarChar(255)
   store_location String          @db.VarChar(255)
   product_store  product_store[]
+}
+
+model cart {
+  cart_id    Int         @id @default(autoincrement())
+  user_id    Int
+  created_at DateTime?   @default(now()) @db.Timestamp(0)
+  users      users       @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "cart_ibfk_1")
+  cartItems  cartItems[]
+
+  @@index([user_id], map: "user_id")
+}
+
+model cartItems {
+  cart_item_id Int      @id @default(autoincrement())
+  cart_id      Int
+  product_id   Int
+  quantity     Int
+  cart         cart     @relation(fields: [cart_id], references: [cart_id], onDelete: NoAction, onUpdate: NoAction, map: "cartItems_ibfk_1")
+  products     products @relation(fields: [product_id], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "cartItems_ibfk_2")
+
+  @@index([cart_id], map: "cart_id")
+  @@index([product_id], map: "product_id")
+}
+
+model users {
+  user_id Int    @id @default(autoincrement())
+  cart    cart[]
 }
