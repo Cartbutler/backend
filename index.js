@@ -110,23 +110,33 @@ app.get('/suggestions', async (req, res) => {
     }
 });
 
-// Products endpoint to display all products
+// Products endpoint to display a single product that fits the requirements
 app.get('/products', async (req, res) => {
     try {
-        const products = await prisma.products.findMany({
+        const { id } = req.query; // Get id parameter
+
+        if (!id) {
+            return res.status(400).json({ error: 'id parameter is required' });
+        }
+
+        const product = await prisma.products.findUnique({
+            where: {
+                product_id: parseInt(id, 10)
+            },
             select: {
                 product_id: true,
                 product_name: true,
                 image_path: true,
                 description: true,
                 price: true,
-            },
-            orderBy: {
-                created_at: 'desc' // Sorting by creation date
             }
         });
 
-        res.json(products);
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json(product);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -160,7 +170,7 @@ app.get('/product', async (req, res) => {
         }
 
         // Calculate min and max prices
-        const prices = product.product_store.map(ps => ps.price);
+        const prices = product.product_store.map(ps => parseFloat(ps.price));
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
 
@@ -169,7 +179,7 @@ app.get('/product', async (req, res) => {
             product_id: product.product_id,
             product_name: product.product_name,
             description: product.description,
-            price: product.price,
+            price: parseFloat(product.price),
             stock: product.stock,
             category_id: product.category_id,
             image_path: product.image_path,
@@ -177,7 +187,7 @@ app.get('/product', async (req, res) => {
             category_name: product.category_name,
             stores: product.product_store.map(ps => ({
                 store_id: ps.store_id,
-                price: ps.price,
+                price: parseFloat(ps.price),
                 stock: ps.stock,
                 store_name: ps.stores.store_name,
                 store_location: ps.stores.store_location
