@@ -25,6 +25,9 @@ const bucket = storage.bucket(bucketName);
 async function resizeImageAsync(imageUrl, imageName) {
     try {
         const response = await fetch(imageUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
+        }
         const buffer = await response.buffer();
 
         const resizedBuffer = await sharp(buffer)
