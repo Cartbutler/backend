@@ -10,6 +10,7 @@ datasource db {
 model categories {
   category_id   Int        @id @default(autoincrement())
   category_name String     @unique
+  image_path    String?    @db.VarChar(255)
   products      products[]
 }
 

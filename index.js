@@ -52,7 +52,20 @@ app.get('/', (req, res) => {
 // Example endpoint to list all categories
 app.get('/categories', async (req, res) => {
     try {
-        const categories = await prisma.categories.findMany();
+        const categories = await prisma.categories.findMany({
+            select: {
+                category_id: true,
+                category_name: true,
+                image_path: true, // Include image_path in the response
+            }
+        });
+
+        console.log('Categories fetched:', categories); // Log the fetched categories
+
+        if (categories.length === 0) {
+            console.warn('No categories found in the database.');
+        }
+
         res.json(categories);
     } catch (err) {
         console.error('Database query error:', err.message);
@@ -99,6 +112,7 @@ app.get('/products', async (req, res) => {
     try {
         const products = await prisma.products.findMany({
             select: {
+                product_id: true,
                 product_name: true,
                 image_path: true,
                 description: true,
@@ -119,64 +133,54 @@ app.get('/products', async (req, res) => {
 // Single product endpoint to get product details by ID or query
 app.get('/product', async (req, res) => {
     try {
-        const { id, query } = req.query; // Get id and query parameters
+        const { id } = req.query; // Get id parameter
 
-        if (!id && !query) {
-            return res.status(400).json({ error: 'Either id or query parameter is required' });
+        if (!id) {
+            return res.status(400).json({ error: 'id parameter is required' });
         }
 
-        let product;
-
-        if (id) {
-            product = await prisma.products.findUnique({
-                where: {
-                    product_id: parseInt(id, 10)
-                },
-                include: {
-                    product_store: {
-                        include: {
-                            stores: true
-                        }
+        const product = await prisma.products.findUnique({
+            where: {
+                product_id: parseInt(id, 10)
+            },
+            include: {
+                product_store: {
+                    include: {
+                        stores: true
                     }
                 }
-            });
-        } else if (query) {
-            product = await prisma.products.findFirst({
-                where: {
-                    product_name: {
-                        contains: query.toLowerCase()
-                    }
-                },
-                include: {
-                    product_store: {
-                        include: {
-                            stores: true
-                        }
-                    }
-                }
-            });
-        }
+            }
+        });
 
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }
 
         // Calculate min and max prices
-        const prices = product.product_store.map(ps => ps.price);
+        const prices = product.product_store.map(ps => parseFloat(ps.price));
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
 
         // Prepare response data
         const responseData = {
-            ...product,
-            minPrice,
-            maxPrice,
+            product_id: product.product_id,
+            product_name: product.product_name,
+            description: product.description,
+            price: parseFloat(product.price),
+            stock: product.stock,
+            category_id: product.category_id,
+            image_path: product.image_path,
+            created_at: product.created_at,
+            category_name: product.category_name,
             stores: product.product_store.map(ps => ({
+                store_id: ps.store_id,
+                price: parseFloat(ps.price),
+                stock: ps.stock,
                 store_name: ps.stores.store_name,
-                store_location: ps.stores.store_location,
-                price: ps.price,
-                stock: ps.stock
-            }))
+                store_location: ps.stores.store_location
+            })),
+            minPrice,
+            maxPrice
         };
 
         res.json(responseData);
