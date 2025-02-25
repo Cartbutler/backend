@@ -110,39 +110,6 @@ app.get('/suggestions', async (req, res) => {
     }
 });
 
-// Products endpoint to display a single product that fits the requirements
-app.get('/products', async (req, res) => {
-    try {
-        const { id } = req.query; // Get id parameter
-
-        if (!id) {
-            return res.status(400).json({ error: 'id parameter is required' });
-        }
-
-        const product = await prisma.products.findUnique({
-            where: {
-                product_id: parseInt(id, 10)
-            },
-            select: {
-                product_id: true,
-                product_name: true,
-                image_path: true,
-                description: true,
-                price: true,
-            }
-        });
-
-        if (!product) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        res.json(product);
-    } catch (err) {
-        console.error('Database query error:', err.message);
-        res.status(500).json({ error: 'Database query error', details: err.message });
-    }
-});
-
 // Single product endpoint to get product details by ID or query
 app.get('/product', async (req, res) => {
     try {
