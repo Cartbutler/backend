@@ -6,7 +6,6 @@ const path = require('path');
 const fs = require('fs');
 const { Storage } = require('@google-cloud/storage');
 const sharp = require('sharp'); // Add sharp for image processing
-const fetch = require('node-fetch'); // Add node-fetch for fetching images
 const app = express();
 const port = process.env.PORT || 5000;
 const host = process.env.HOST || 'localhost'; // Bind to localhost
@@ -24,6 +23,7 @@ const bucket = storage.bucket(bucketName);
 // Function to resize an image asynchronously
 async function resizeImageAsync(imageUrl, imageName) {
     try {
+        const fetch = (await import('node-fetch')).default; // Dynamically import node-fetch
         const response = await fetch(imageUrl);
         if (!response.ok) {
             throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
@@ -170,7 +170,7 @@ app.get('/product', async (req, res) => {
         }
 
         // Calculate min and max prices
-        const prices = product.product_store.map(ps => parseFloat(ps.price));
+        const prices = product.product_store.map(ps => ps.price);
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
 
@@ -179,7 +179,7 @@ app.get('/product', async (req, res) => {
             product_id: product.product_id,
             product_name: product.product_name,
             description: product.description,
-            price: parseFloat(product.price),
+            price: product.price,
             stock: product.stock,
             category_id: product.category_id,
             image_path: product.image_path,
@@ -187,7 +187,7 @@ app.get('/product', async (req, res) => {
             category_name: product.category_name,
             stores: product.product_store.map(ps => ({
                 store_id: ps.store_id,
-                price: parseFloat(ps.price),
+                price: ps.price,
                 stock: ps.stock,
                 store_name: ps.stores.store_name,
                 store_location: ps.stores.store_location
@@ -202,7 +202,6 @@ app.get('/product', async (req, res) => {
         res.status(500).json({ error: 'Database query error', details: err.message });
     }
 });
-
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
