@@ -6,7 +6,6 @@ const path = require('path');
 const fs = require('fs');
 const { Storage } = require('@google-cloud/storage');
 const sharp = require('sharp'); // Add sharp for image processing
-const fetch = require('node-fetch'); // Add node-fetch for fetching images
 const app = express();
 const port = process.env.PORT || 5000;
 const host = process.env.HOST || 'localhost'; // Bind to localhost
@@ -24,7 +23,11 @@ const bucket = storage.bucket(bucketName);
 // Function to resize an image asynchronously
 async function resizeImageAsync(imageUrl, imageName) {
     try {
+        const fetch = (await import('node-fetch')).default; // Dynamically import node-fetch
         const response = await fetch(imageUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
+        }
         const buffer = await response.buffer();
 
         const resizedBuffer = await sharp(buffer)
@@ -52,7 +55,20 @@ app.get('/', (req, res) => {
 // Example endpoint to list all categories
 app.get('/categories', async (req, res) => {
     try {
-        const categories = await prisma.categories.findMany();
+        const categories = await prisma.categories.findMany({
+            select: {
+                category_id: true,
+                category_name: true,
+                image_path: true, // Include image_path in the response
+            }
+        });
+
+        console.log('Categories fetched:', categories); // Log the fetched categories
+
+        if (categories.length === 0) {
+            console.warn('No categories found in the database.');
+        }
+
         res.json(categories);
     } catch (err) {
         console.error('Database query error:', err.message);
@@ -94,68 +110,27 @@ app.get('/suggestions', async (req, res) => {
     }
 });
 
-// Products endpoint to display all products
-app.get('/products', async (req, res) => {
-    try {
-        const products = await prisma.products.findMany({
-            select: {
-                product_name: true,
-                image_path: true,
-                description: true,
-                price: true,
-            },
-            orderBy: {
-                created_at: 'desc' // Sorting by creation date
-            }
-        });
-
-        res.json(products);
-    } catch (err) {
-        console.error('Database query error:', err.message);
-        res.status(500).json({ error: 'Database query error', details: err.message });
-    }
-});
-
 // Single product endpoint to get product details by ID or query
 app.get('/product', async (req, res) => {
     try {
-        const { id, query } = req.query; // Get id and query parameters
+        const { id } = req.query; // Get id parameter
 
-        if (!id && !query) {
-            return res.status(400).json({ error: 'Either id or query parameter is required' });
+        if (!id) {
+            return res.status(400).json({ error: 'id parameter is required' });
         }
 
-        let product;
-
-        if (id) {
-            product = await prisma.products.findUnique({
-                where: {
-                    product_id: parseInt(id, 10)
-                },
-                include: {
-                    product_store: {
-                        include: {
-                            stores: true
-                        }
+        const product = await prisma.products.findUnique({
+            where: {
+                product_id: parseInt(id, 10)
+            },
+            include: {
+                product_store: {
+                    include: {
+                        stores: true
                     }
                 }
-            });
-        } else if (query) {
-            product = await prisma.products.findFirst({
-                where: {
-                    product_name: {
-                        contains: query.toLowerCase()
-                    }
-                },
-                include: {
-                    product_store: {
-                        include: {
-                            stores: true
-                        }
-                    }
-                }
-            });
-        }
+            }
+        });
 
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
@@ -168,15 +143,24 @@ app.get('/product', async (req, res) => {
 
         // Prepare response data
         const responseData = {
-            ...product,
-            minPrice,
-            maxPrice,
+            product_id: product.product_id,
+            product_name: product.product_name,
+            description: product.description,
+            price: product.price,
+            stock: product.stock,
+            category_id: product.category_id,
+            image_path: product.image_path,
+            created_at: product.created_at,
+            category_name: product.category_name,
             stores: product.product_store.map(ps => ({
-                store_name: ps.stores.store_name,
-                store_location: ps.stores.store_location,
+                store_id: ps.store_id,
                 price: ps.price,
-                stock: ps.stock
-            }))
+                stock: ps.stock,
+                store_name: ps.stores.store_name,
+                store_location: ps.stores.store_location
+            })),
+            minPrice,
+            maxPrice
         };
 
         res.json(responseData);
@@ -185,7 +169,6 @@ app.get('/product', async (req, res) => {
         res.status(500).json({ error: 'Database query error', details: err.message });
     }
 });
-
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
