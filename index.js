@@ -138,8 +138,8 @@ app.get('/product', async (req, res) => {
 
         // Calculate min and max prices
         const prices = product.product_store.map(ps => ps.price);
-        const minPrice = Math.min(...prices);
-        const maxPrice = Math.max(...prices);
+        const min_price = Math.min(...prices);
+        const max_price = Math.max(...prices);
 
         // Prepare response data
         const responseData = {
@@ -159,8 +159,8 @@ app.get('/product', async (req, res) => {
                 store_name: ps.stores.store_name,
                 store_location: ps.stores.store_location
             })),
-            minPrice,
-            maxPrice
+            min_price,
+            max_price
         };
 
         res.json(responseData);
@@ -169,6 +169,7 @@ app.get('/product', async (req, res) => {
         res.status(500).json({ error: 'Database query error', details: err.message });
     }
 });
+
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
