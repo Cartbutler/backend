@@ -105,15 +105,15 @@ model stores {
 
 model cart {
   id        Int      @id @default(autoincrement())
-  userId    Int
+  userId    String   @db.VarChar(36)
   productId Int
   quantity  Int
   products  products @relation(fields: [productId], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "cart_ibfk_1")
 
-  @@unique([userId, productId], map: "userId")
+  @@unique([userId, productId], map: "userId_productId")
   @@index([productId], map: "productId")
 }
 
 model users {
-  user_id Int @id @default(autoincrement())
+  user_id String @id @db.VarChar(36)
 }
