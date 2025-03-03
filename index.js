@@ -226,6 +226,113 @@ app.get('/search', async (req, res) => {
     }
 });
 
+// Add to shopping cart endpoint (POST)
+app.post('/cart', async (req, res) => {
+    try {
+        const { userId, productId, quantity } = req.body;
+
+        if (!userId || !productId || quantity === undefined) {
+            return res.status(400).json({ error: 'userId, productId, and quantity are required' });
+        }
+
+        // Check if the product exists
+        const product = await prisma.products.findUnique({
+            where: { product_id: productId }
+        });
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        if (quantity === 0) {
+            // Remove the product from the cart
+            await prisma.cart.delete({
+                where: {
+                    userId_productId: {
+                        userId: userId,
+                        productId: productId
+                    }
+                }
+            });
+        } else {
+            // Add or update the product in the user's cart
+            await prisma.cart.upsert({
+                where: {
+                    userId_productId: {
+                        userId: userId,
+                        productId: productId
+                    }
+                },
+                update: {
+                    quantity: quantity // Set the quantity directly
+                },
+                create: {
+                    userId: userId,
+                    productId: productId,
+                    quantity: quantity
+                }
+            });
+        }
+
+        // Retrieve the updated cart item
+        const updatedCartItem = await prisma.cart.findUnique({
+            where: {
+                userId_productId: {
+                    userId: userId,
+                    productId: productId
+                }
+            },
+            include: {
+                product: true
+            }
+        });
+
+        console.log(`User ${userId} updated their cart with product ${productId} and quantity ${quantity}`);
+        res.json(updatedCartItem);
+    } catch (err) {
+        console.error('Error updating cart:', err.message);
+        res.status(500).json({ error: 'Error updating cart', details: err.message });
+    }
+});
+
+// Get shopping cart endpoint (GET)
+app.get('/cart', async (req, res) => {
+    try {
+        const { userId, productId } = req.query;
+
+        if (!userId) {
+            return res.status(400).json({ error: 'userId is required' });
+        }
+
+        if (!productId) {
+            return res.status(400).json({ error: 'productId is required' });
+        }
+
+        // Retrieve the user's cart item
+        const cartItem = await prisma.cart.findUnique({
+            where: {
+                userId_productId: {
+                    userId: parseInt(userId, 10),
+                    productId: parseInt(productId, 10)
+                }
+            },
+            include: {
+                product: true
+            }
+        });
+
+        if (!cartItem) {
+            return res.status(404).json({ error: 'Cart item not found' });
+        }
+
+        console.log(`User ${userId} retrieved their cart item for product ${productId}`);
+        res.json(cartItem);
+    } catch (err) {
+        console.error('Error retrieving cart item:', err.message);
+        res.status(500).json({ error: 'Error retrieving cart item', details: err.message });
+    }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
