@@ -32,6 +32,7 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
    - Create a `.env` file in the root directory and add the following:
      ```sh
      DATABASE_URL=mysql://cartbutler8946:conestoga8946@104.197.180.231:3306/cartbutler8946
+     GCLOUD_STORAGE_BUCKET=your-bucket-name
      ```
 
 4. Run the Prisma migrations:
@@ -86,13 +87,31 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   curl http://localhost:5000/search?query=example&categoryID=1
   ```
 
-### List All Products
-- **GET /products**
+### Single Product Details
+- **GET /product**
 
-  Returns a list of all products.
+  Returns product details by ID.
 
   ```sh
-  curl http://localhost:5000/products
+  curl http://localhost:5000/product?id=1
+  ```
+
+### Add to Shopping Cart
+- **POST /cart**
+
+  Adds an item to the shopping cart or updates the quantity if the item already exists. If the quantity is set to 0, the item is removed from the cart.
+
+  ```sh
+  curl -X POST http://localhost:5000/cart -H "Content-Type: application/json" -d '{"userId": "1", "productId": "1", "quantity": 2}'
+  ```
+
+### Get Shopping Cart Item
+- **GET /cart**
+
+  Retrieves a single cart item for a user.
+
+  ```sh
+  curl http://localhost:5000/cart?userId=1&productId=1
   ```
 
 ## Environment Variables
@@ -100,3 +119,4 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
 The following environment variables need to be set in the `.env` file:
 
 - `DATABASE_URL`: The connection string for the database.
+- `GCLOUD_STORAGE_BUCKET`: The name of your Google Cloud Storage bucket.
