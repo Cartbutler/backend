@@ -111,7 +111,7 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   Retrieves a single cart item for a user.
 
   ```sh
-  curl http://localhost:5000/cart?userId=1&productId=1
+  curl http://localhost:5000/cart?userId=<USER ID>
   ```
 
 ## Environment Variables
