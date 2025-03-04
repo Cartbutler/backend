@@ -47,6 +47,37 @@ async function resizeImageAsync(imageUrl, imageName) {
     }
 }
 
+async function fetchOrCreateCart(userId) {
+    let cart = await prisma.cart.findFirst({
+        where: { userId: userId },
+        include: {
+            cartItems: {
+                include: {
+                    products: true
+                }
+            }
+        }
+    });
+
+    if (!cart) {
+        cart = await prisma.cart.create({
+            data: {
+                userId: userId,
+                cartItems: []
+            },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
+    }
+
+    return cart;
+}
+
 // Root route
 app.get('/', (req, res) => {
     res.send('Welcome to the CartButler API this screen is just a landing page');
@@ -244,19 +275,8 @@ app.post('/cart', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        // Check if the cart exists for the user
-        let cart = await prisma.cart.findFirst({
-            where: { userId: userId }
-        });
-
-        if (!cart) {
-            // Create a new cart for the user if it doesn't exist
-            cart = await prisma.cart.create({
-                data: {
-                    userId: userId
-                }
-            });
-        }
+        // Fetch or create the cart for the user
+        let cart = await fetchOrCreateCart(userId);
 
         if (quantity === 0) {
             // Remove the product from the cart
@@ -287,21 +307,10 @@ app.post('/cart', async (req, res) => {
         }
 
         // Retrieve the updated cart with cart items
-        const updatedCart = await prisma.cart.findFirst({
-            where: {
-                userId: userId
-            },
-            include: {
-                cartItems: {
-                    include: {
-                        products: true
-                    }
-                }
-            }
-        });
+        cart = await fetchOrCreateCart(userId);
 
         console.log(`User ${userId} updated their cart with product ${productId} and quantity ${quantity}`);
-        res.json(updatedCart);
+        res.json(cart);
     } catch (err) {
         console.error('Error updating cart:', err.message);
         res.status(500).json({ error: 'Error updating cart', details: err.message });
@@ -317,23 +326,8 @@ app.get('/cart', async (req, res) => {
             return res.status(400).json({ error: 'userId is required' });
         }
 
-        // Retrieve the user's cart with cart items
-        const cart = await prisma.cart.findFirst({
-            where: {
-                userId: userId
-            },
-            include: {
-                cartItems: {
-                    include: {
-                        products: true
-                    }
-                }
-            }
-        });
-
-        if (!cart || !cart.cartItems.length) {
-            return res.status(404).json({ error: 'Cart items not found' });
-        }
+        // Fetch or create the user's cart with cart items
+        const cart = await fetchOrCreateCart(userId);
 
         console.log(`User ${userId} retrieved their cart items`);
         res.json(cart);
