@@ -47,6 +47,37 @@ async function resizeImageAsync(imageUrl, imageName) {
     }
 }
 
+async function fetchOrCreateCart(userId) {
+    let cart = await prisma.cart.findFirst({
+        where: { userId: userId },
+        include: {
+            cartItems: {
+                include: {
+                    products: true
+                }
+            }
+        }
+    });
+
+    if (!cart) {
+        cart = await prisma.cart.create({
+            data: {
+                userId: userId,
+                cartItems: []
+            },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
+    }
+
+    return cart;
+}
+
 // Root route
 app.get('/', (req, res) => {
     res.send('Welcome to the CartButler API this screen is just a landing page');
@@ -244,22 +275,23 @@ app.post('/cart', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
+        // Fetch or create the cart for the user
+        let cart = await fetchOrCreateCart(userId);
+
         if (quantity === 0) {
             // Remove the product from the cart
-            await prisma.cart.delete({
+            await prisma.cartItems.deleteMany({
                 where: {
-                    userId_productId: {
-                        userId: userId,
-                        productId: productId
-                    }
+                    cartId: cart.id,
+                    productId: productId
                 }
             });
         } else {
             // Add or update the product in the user's cart
-            await prisma.cart.upsert({
+            await prisma.cartItems.upsert({
                 where: {
-                    userId_productId: {
-                        userId: userId,
+                    cartId_productId: {
+                        cartId: cart.id,
                         productId: productId
                     }
                 },
@@ -267,28 +299,18 @@ app.post('/cart', async (req, res) => {
                     quantity: quantity // Set the quantity directly
                 },
                 create: {
-                    userId: userId,
+                    cartId: cart.id,
                     productId: productId,
                     quantity: quantity
                 }
             });
         }
 
-        // Retrieve the updated cart item
-        const updatedCartItem = await prisma.cart.findUnique({
-            where: {
-                userId_productId: {
-                    userId: userId,
-                    productId: productId
-                }
-            },
-            include: {
-                product: true
-            }
-        });
+        // Retrieve the updated cart with cart items
+        cart = await fetchOrCreateCart(userId);
 
         console.log(`User ${userId} updated their cart with product ${productId} and quantity ${quantity}`);
-        res.json(updatedCartItem);
+        res.json(cart);
     } catch (err) {
         console.error('Error updating cart:', err.message);
         res.status(500).json({ error: 'Error updating cart', details: err.message });
@@ -298,38 +320,20 @@ app.post('/cart', async (req, res) => {
 // Get shopping cart endpoint (GET)
 app.get('/cart', async (req, res) => {
     try {
-        const { userId, productId } = req.query;
+        const { userId } = req.query;
 
         if (!userId) {
             return res.status(400).json({ error: 'userId is required' });
         }
 
-        if (!productId) {
-            return res.status(400).json({ error: 'productId is required' });
-        }
+        // Fetch or create the user's cart with cart items
+        const cart = await fetchOrCreateCart(userId);
 
-        // Retrieve the user's cart item
-        const cartItem = await prisma.cart.findUnique({
-            where: {
-                userId_productId: {
-                    userId: userId, // Correct field name
-                    productId: parseInt(productId, 10)
-                }
-            },
-            include: {
-                products: true // Correct include statement
-            }
-        });
-
-        if (!cartItem) {
-            return res.status(404).json({ error: 'Cart item not found' });
-        }
-
-        console.log(`User ${userId} retrieved their cart item for product ${productId}`);
-        res.json(cartItem);
+        console.log(`User ${userId} retrieved their cart items`);
+        res.json(cart);
     } catch (err) {
-        console.error('Error retrieving cart item:', err.message);
-        res.status(500).json({ error: 'Error retrieving cart item', details: err.message });
+        console.error('Error retrieving cart items:', err.message);
+        res.status(500).json({ error: 'Error retrieving cart items', details: err.message });
     }
 });
 
