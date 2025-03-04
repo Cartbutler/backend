@@ -115,5 +115,5 @@ model cart {
 }
 
 model users {
-  user_id String @id @db.VarChar(36)
+  userId String @id @db.VarChar(36)
 }

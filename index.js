@@ -312,12 +312,12 @@ app.get('/cart', async (req, res) => {
         const cartItem = await prisma.cart.findUnique({
             where: {
                 userId_productId: {
-                    userId: parseInt(userId, 10),
+                    userId: userId, // Correct field name
                     productId: parseInt(productId, 10)
                 }
             },
             include: {
-                product: true
+                products: true // Correct include statement
             }
         });
 
