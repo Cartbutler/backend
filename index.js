@@ -244,22 +244,34 @@ app.post('/cart', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
+        // Check if the cart exists for the user
+        let cart = await prisma.cart.findUnique({
+            where: { userId: userId }
+        });
+
+        if (!cart) {
+            // Create a new cart for the user if it doesn't exist
+            cart = await prisma.cart.create({
+                data: {
+                    userId: userId
+                }
+            });
+        }
+
         if (quantity === 0) {
             // Remove the product from the cart
-            await prisma.cart.delete({
+            await prisma.cartItems.deleteMany({
                 where: {
-                    userId_productId: {
-                        userId: userId,
-                        productId: productId
-                    }
+                    cartId: cart.id,
+                    productId: productId
                 }
             });
         } else {
             // Add or update the product in the user's cart
-            await prisma.cart.upsert({
+            await prisma.cartItems.upsert({
                 where: {
-                    userId_productId: {
-                        userId: userId,
+                    cartId_productId: {
+                        cartId: cart.id,
                         productId: productId
                     }
                 },
@@ -267,7 +279,7 @@ app.post('/cart', async (req, res) => {
                     quantity: quantity // Set the quantity directly
                 },
                 create: {
-                    userId: userId,
+                    cartId: cart.id,
                     productId: productId,
                     quantity: quantity
                 }
@@ -275,15 +287,15 @@ app.post('/cart', async (req, res) => {
         }
 
         // Retrieve the updated cart item
-        const updatedCartItem = await prisma.cart.findUnique({
+        const updatedCartItem = await prisma.cartItems.findUnique({
             where: {
-                userId_productId: {
-                    userId: userId,
+                cartId_productId: {
+                    cartId: cart.id,
                     productId: productId
                 }
             },
             include: {
-                product: true
+                products: true
             }
         });
 
@@ -298,38 +310,33 @@ app.post('/cart', async (req, res) => {
 // Get shopping cart endpoint (GET)
 app.get('/cart', async (req, res) => {
     try {
-        const { userId, productId } = req.query;
+        const { userId } = req.query;
 
         if (!userId) {
             return res.status(400).json({ error: 'userId is required' });
         }
 
-        if (!productId) {
-            return res.status(400).json({ error: 'productId is required' });
-        }
-
-        // Retrieve the user's cart item
-        const cartItem = await prisma.cart.findUnique({
+        // Retrieve the user's cart items
+        const cartItems = await prisma.cartItems.findMany({
             where: {
-                userId_productId: {
-                    userId: userId, // Correct field name
-                    productId: parseInt(productId, 10)
+                cart: {
+                    userId: userId
                 }
             },
             include: {
-                products: true // Correct include statement
+                products: true
             }
         });
 
-        if (!cartItem) {
-            return res.status(404).json({ error: 'Cart item not found' });
+        if (!cartItems.length) {
+            return res.status(404).json({ error: 'Cart items not found' });
         }
 
-        console.log(`User ${userId} retrieved their cart item for product ${productId}`);
-        res.json(cartItem);
+        console.log(`User ${userId} retrieved their cart items`);
+        res.json(cartItems);
     } catch (err) {
-        console.error('Error retrieving cart item:', err.message);
-        res.status(500).json({ error: 'Error retrieving cart item', details: err.message });
+        console.error('Error retrieving cart items:', err.message);
+        res.status(500).json({ error: 'Error retrieving cart items', details: err.message });
     }
 });
 

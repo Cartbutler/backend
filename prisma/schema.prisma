@@ -24,7 +24,7 @@ model products {
   image_path    String
   created_at    DateTime        @default(now())
   category_name String?         @db.VarChar(255)
-  cart          cart[]
+  cartItems     cartItems[]
   product_store product_store[]
   category      categories      @relation(fields: [category_id], references: [category_id])
 
@@ -104,16 +104,24 @@ model stores {
 }
 
 model cart {
-  id        Int      @id @default(autoincrement())
-  userId    String   @db.VarChar(36)
-  productId Int
+  id        Int         @id @default(autoincrement())
+  userId    String      @unique(map: "userId_productId") @db.VarChar(36)
   quantity  Int
-  products  products @relation(fields: [productId], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "cart_ibfk_1")
-
-  @@unique([userId, productId], map: "userId_productId")
-  @@index([productId], map: "productId")
+  cartItems cartItems[]
 }
 
 model users {
   userId String @id @db.VarChar(36)
+}
+
+model cartItems {
+  id        Int      @id @default(autoincrement())
+  cartId    Int
+  productId Int
+  quantity  Int
+  cart      cart     @relation(fields: [cartId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "cartItems_ibfk_1")
+  products  products @relation(fields: [productId], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "cartItems_ibfk_2")
+
+  @@unique([cartId, productId], map: "cartId_productId")
+  @@index([productId], map: "productId")
 }
