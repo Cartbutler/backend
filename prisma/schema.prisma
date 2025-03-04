@@ -105,9 +105,10 @@ model stores {
 
 model cart {
   id        Int         @id @default(autoincrement())
-  userId    String      @unique(map: "userId_productId") @db.VarChar(36)
-  quantity  Int
+  userId    String      @db.VarChar(36)
   cartItems cartItems[]
+
+  @@index([userId], map: "userId")
 }
 
 model users {
