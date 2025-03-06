@@ -337,6 +337,67 @@ app.get('/cart', async (req, res) => {
     }
 });
 
+// Shopping results endpoint (POST)
+app.post('/shopping-results', async (req, res) => {
+    try {
+        const { products } = req.body; // Get products with quantities from request body
+
+        if (!products || !Array.isArray(products) || products.length === 0) {
+            return res.status(400).json({ error: 'products parameter is required and should be a non-empty array' });
+        }
+
+        const product_ids_array = products.map(p => p.productId);
+        const quantities = products.reduce((acc, p) => {
+            acc[p.productId] = p.quantity;
+            return acc;
+        }, {});
+
+        // Fetch products and their prices from stores
+        const product_store_data = await prisma.product_store.findMany({
+            where: {
+                product_id: {
+                    in: product_ids_array
+                }
+            },
+            include: {
+                products: true,
+                stores: true
+            }
+        });
+
+        // Group products by store
+        const store_products = product_store_data.reduce((acc, product) => {
+            const store_id = product.store_id;
+            if (!acc[store_id]) {
+                acc[store_id] = {
+                    store_id: product.stores.store_id,
+                    store_name: product.stores.store_name,
+                    store_location: product.stores.store_location,
+                    products: [],
+                    total: 0
+                };
+            }
+            const quantity = quantities[product.product_id];
+            acc[store_id].products.push({
+                product_id: product.product_id,
+                product_name: product.products.product_name,
+                price: product.price,
+                quantity: quantity
+            });
+            acc[store_id].total += product.price * quantity;
+            return acc;
+        }, {});
+
+        // Convert the store_products object to an array and sort by total price
+        const sorted_stores = Object.values(store_products).sort((a, b) => a.total - b.total);
+
+        res.json(sorted_stores);
+    } catch (err) {
+        console.error('Error fetching shopping results:', err.message);
+        res.status(500).json({ error: 'Error fetching shopping results', details: err.message });
+    }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
