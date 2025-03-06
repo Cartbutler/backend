@@ -337,59 +337,72 @@ app.get('/cart', async (req, res) => {
     }
 });
 
-// Shopping results endpoint (POST)
-app.post('/shopping-results', async (req, res) => {
+// Shopping results endpoint (GET)
+app.get('/shopping-results', async (req, res) => {
     try {
-        const { products } = req.body; // Get products with quantities from request body
+        const { cartId, userId } = req.query; // Get cartId and userId from query parameters
 
-        if (!products || !Array.isArray(products) || products.length === 0) {
-            return res.status(400).json({ error: 'products parameter is required and should be a non-empty array' });
+        if (!cartId || !userId) {
+            return res.status(400).json({ error: 'cartId and userId parameters are required' });
         }
 
-        const product_ids_array = products.map(p => p.productId);
-        const quantities = products.reduce((acc, p) => {
-            acc[p.productId] = p.quantity;
-            return acc;
-        }, {});
-
-        // Fetch products and their prices from stores
-        const product_store_data = await prisma.product_store.findMany({
-            where: {
-                product_id: {
-                    in: product_ids_array
-                }
-            },
+        // Fetch the cart with cart items for the user
+        const cart = await prisma.cart.findUnique({
+            where: { id: parseInt(cartId, 10) },
             include: {
-                products: true,
-                stores: true
+                cartItems: {
+                    include: {
+                        products: {
+                            include: {
+                                product_store: {
+                                    include: {
+                                        stores: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
 
+        if (!cart || cart.userId !== userId) {
+            return res.status(404).json({ error: 'Cart not found or does not belong to the user' });
+        }
+
         // Group products by store
-        const store_products = product_store_data.reduce((acc, product) => {
-            const store_id = product.store_id;
-            if (!acc[store_id]) {
-                acc[store_id] = {
-                    store_id: product.stores.store_id,
-                    store_name: product.stores.store_name,
-                    store_location: product.stores.store_location,
-                    products: [],
-                    total: 0
-                };
-            }
-            const quantity = quantities[product.product_id];
-            acc[store_id].products.push({
-                product_id: product.product_id,
-                product_name: product.products.product_name,
-                price: product.price,
-                quantity: quantity
+        const store_products = cart.cartItems.reduce((acc, cartItem) => {
+            cartItem.products.product_store.forEach(productStore => {
+                const store_id = productStore.store_id;
+                if (!acc[store_id]) {
+                    acc[store_id] = {
+                        store_id: productStore.stores.store_id,
+                        store_name: productStore.stores.store_name,
+                        store_location: productStore.stores.store_location,
+                        products: [],
+                        total: 0
+                    };
+                }
+                acc[store_id].products.push({
+                    product_id: cartItem.product_id,
+                    product_name: cartItem.products.product_name,
+                    price: productStore.price,
+                    quantity: cartItem.quantity
+                });
+                acc[store_id].total += productStore.price * cartItem.quantity;
             });
-            acc[store_id].total += product.price * quantity;
             return acc;
         }, {});
 
-        // Convert the store_products object to an array and sort by total price
-        const sorted_stores = Object.values(store_products).sort((a, b) => a.total - b.total);
+        // Filter out stores that do not have all the products from the shopping list
+        const filtered_stores = Object.values(store_products).filter(store => {
+            const store_product_ids = store.products.map(product => product.product_id);
+            const cart_product_ids = cart.cartItems.map(cartItem => cartItem.product_id);
+            return cart_product_ids.every(productId => store_product_ids.includes(productId));
+        });
+
+        // Sort the filtered stores by total price
+        const sorted_stores = filtered_stores.sort((a, b) => a.total - b.total);
 
         res.json(sorted_stores);
     } catch (err) {

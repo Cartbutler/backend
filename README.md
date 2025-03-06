@@ -114,6 +114,21 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   curl http://localhost:5000/cart?userId=<USER ID>
   ```
 
+### Shopping Results
+- **POST /shopping-results**
+
+  Calculates and returns the smallest shopping list price sorted by store price. The endpoint accepts a list of products with their quantities in the request body.
+
+  ```sh
+  curl -X POST http://localhost:5000/shopping-results -H "Content-Type: application/json" -d '{
+    "products": [
+      { "productId": 1, "quantity": 2 },
+      { "productId": 2, "quantity": 1 },
+      { "productId": 3, "quantity": 3 }
+    ]
+  }'
+  ```
+
 ## Environment Variables
 
 The following environment variables need to be set in the `.env` file:
