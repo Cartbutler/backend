@@ -348,7 +348,10 @@ app.get('/shopping-results', async (req, res) => {
 
         // Fetch the cart with cart items for the user
         const cart = await prisma.cart.findUnique({
-            where: { id: parseInt(cartId, 10) },
+            where: {
+                id: parseInt(cartId, 10),
+                userId: userId // Ensure userId is treated as a string
+            },
             include: {
                 cartItems: {
                     include: {
@@ -366,7 +369,7 @@ app.get('/shopping-results', async (req, res) => {
             }
         });
 
-        if (!cart || cart.userId !== userId) {
+        if (!cart) {
             return res.status(404).json({ error: 'Cart not found or does not belong to the user' });
         }
 
