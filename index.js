@@ -260,10 +260,10 @@ app.get('/search', async (req, res) => {
 // Add to shopping cart endpoint (POST)
 app.post('/cart', async (req, res) => {
     try {
-        const { userId, productId, quantity } = req.body;
+        const { cartId, productId, quantity } = req.body;
 
-        if (!userId || !productId || quantity === undefined) {
-            return res.status(400).json({ error: 'userId, productId, and quantity are required' });
+        if (!cartId || !productId || quantity === undefined) {
+            return res.status(400).json({ error: 'cartId, productId, and quantity are required' });
         }
 
         // Check if the product exists
@@ -275,8 +275,21 @@ app.post('/cart', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        // Fetch or create the cart for the user
-        let cart = await fetch_or_create_cart(userId);
+        // Fetch the cart for the user
+        let cart = await prisma.cart.findUnique({
+            where: { id: parseInt(cartId, 10) },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
+
+        if (!cart) {
+            return res.status(404).json({ error: 'Cart not found' });
+        }
 
         if (quantity === 0) {
             // Remove the product from the cart
@@ -307,9 +320,18 @@ app.post('/cart', async (req, res) => {
         }
 
         // Retrieve the updated cart with cart items
-        cart = await fetch_or_create_cart(userId);
+        cart = await prisma.cart.findUnique({
+            where: { id: parseInt(cartId, 10) },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
 
-        console.log(`User ${userId} updated their cart with product ${productId} and quantity ${quantity}`);
+        console.log(`Cart ${cartId} updated with product ${productId} and quantity ${quantity}`);
         res.json(cart);
     } catch (err) {
         console.error('Error updating cart:', err.message);
