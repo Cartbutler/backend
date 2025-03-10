@@ -260,10 +260,10 @@ app.get('/search', async (req, res) => {
 // Add to shopping cart endpoint (POST)
 app.post('/cart', async (req, res) => {
     try {
-        const { cartId, productId, quantity } = req.body;
+        const { userId, productId, quantity } = req.body;
 
-        if (!cartId || !productId || quantity === undefined) {
-            return res.status(400).json({ error: 'cartId, productId, and quantity are required' });
+        if (!userId || !productId || quantity === undefined) {
+            return res.status(400).json({ error: 'userId, productId, and quantity are required' });
         }
 
         // Check if the product exists
@@ -275,9 +275,9 @@ app.post('/cart', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        // Fetch the cart for the user
-        let cart = await prisma.cart.findUnique({
-            where: { id: parseInt(cartId, 10) },
+        // Fetch or create the cart for the user
+        let cart = await prisma.cart.findFirst({
+            where: { userId: userId },
             include: {
                 cartItems: {
                     include: {
@@ -288,7 +288,21 @@ app.post('/cart', async (req, res) => {
         });
 
         if (!cart) {
-            return res.status(404).json({ error: 'Cart not found' });
+            cart = await prisma.cart.create({
+                data: {
+                    userId: userId,
+                    cartItems: {
+                        create: []
+                    }
+                },
+                include: {
+                    cartItems: {
+                        include: {
+                            products: true
+                        }
+                    }
+                }
+            });
         }
 
         if (quantity === 0) {
@@ -320,8 +334,8 @@ app.post('/cart', async (req, res) => {
         }
 
         // Retrieve the updated cart with cart items
-        cart = await prisma.cart.findUnique({
-            where: { id: parseInt(cartId, 10) },
+        cart = await prisma.cart.findFirst({
+            where: { userId: userId },
             include: {
                 cartItems: {
                     include: {
@@ -331,7 +345,7 @@ app.post('/cart', async (req, res) => {
             }
         });
 
-        console.log(`Cart ${cartId} updated with product ${productId} and quantity ${quantity}`);
+        console.log(`User ${userId} updated their cart with product ${productId} and quantity ${quantity}`);
         res.json(cart);
     } catch (err) {
         console.error('Error updating cart:', err.message);
