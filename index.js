@@ -17,39 +17,39 @@ const prisma = new PrismaClient();
 
 // Set up Google Cloud Storage
 const storage = new Storage();
-const bucketName = process.env.GCLOUD_STORAGE_BUCKET; // Replace with your actual bucket name
-const bucket = storage.bucket(bucketName);
+const bucket_name = process.env.GCLOUD_STORAGE_BUCKET; // Replace with your actual bucket name
+const bucket = storage.bucket(bucket_name);
 
 // Function to resize an image asynchronously
-async function resizeImageAsync(imageUrl, imageName) {
+async function resize_image_async(image_url, image_name) {
     try {
         const fetch = (await import('node-fetch')).default; // Dynamically import node-fetch
-        const response = await fetch(imageUrl);
+        const response = await fetch(image_url);
         if (!response.ok) {
-            throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
+            throw new Error(`Failed to fetch image from URL: ${image_url}`);
         }
         const buffer = await response.buffer();
 
-        const resizedBuffer = await sharp(buffer)
+        const resized_buffer = await sharp(buffer)
             .resize(160, 160)
             .toBuffer();
 
-        const resizedImageName = `160x160-${imageName}`;
-        const resizedImageBlob = bucket.file(resizedImageName);
+        const resized_image_name = `160x160-${image_name}`;
+        const resized_image_blob = bucket.file(resized_image_name);
 
         // Check if the resized image already exists
-        const [exists] = await resizedImageBlob.exists();
+        const [exists] = await resized_image_blob.exists();
         if (!exists) {
-            await resizedImageBlob.save(resizedBuffer);
+            await resized_image_blob.save(resized_buffer);
         }
     } catch (err) {
         console.error('Image resizing error:', err.message);
     }
 }
 
-async function fetchOrCreateCart(userId) {
+async function fetch_or_create_cart(user_id) {
     let cart = await prisma.cart.findFirst({
-        where: { userId: userId },
+        where: { userId: user_id },
         include: {
             cartItems: {
                 include: {
@@ -62,7 +62,7 @@ async function fetchOrCreateCart(userId) {
     if (!cart) {
         cart = await prisma.cart.create({
             data: {
-                userId: userId,
+                userId: user_id,
                 cartItems: []
             },
             include: {
@@ -116,15 +116,15 @@ app.get('/suggestions', async (req, res) => {
             return res.status(400).json({ error: 'Query parameter is required' });
         }
 
-        const searchTerms = query.split(/\s+/); // Format to split with whitespace
+        const search_terms = query.split(/\s+/); // Format to split with whitespace
 
-        const conditions = searchTerms.map(term => ({
+        const conditions = search_terms.map(term => ({
             name: {
                 contains: term.toLowerCase()
             }
         }));
 
-        const pSuggestions = await prisma.pSuggestions.findMany({
+        const p_suggestions = await prisma.pSuggestions.findMany({
             where: {
                 OR: conditions
             },
@@ -134,7 +134,7 @@ app.get('/suggestions', async (req, res) => {
             take: 5 // Limit results
         });
 
-        res.json(pSuggestions);
+        res.json(p_suggestions);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -173,7 +173,7 @@ app.get('/product', async (req, res) => {
         const max_price = Math.max(...prices);
 
         // Prepare response data
-        const responseData = {
+        const response_data = {
             product_id: product.product_id,
             product_name: product.product_name,
             description: product.description,
@@ -194,7 +194,7 @@ app.get('/product', async (req, res) => {
             max_price
         };
 
-        res.json(responseData);
+        res.json(response_data);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -210,12 +210,12 @@ app.get('/search', async (req, res) => {
             return res.status(400).json({ error: 'At least one of query or categoryID parameter is required' });
         }
 
-        const searchConditions = [];
+        const search_conditions = [];
 
         if (query) {
-            const searchTerms = query.split(/\s+/); // Split query into search terms
-            searchTerms.forEach(term => {
-                searchConditions.push({
+            const search_terms = query.split(/\s+/); // Split query into search terms
+            search_terms.forEach(term => {
+                search_conditions.push({
                     product_name: {
                         contains: term.toLowerCase()
                     }
@@ -224,14 +224,14 @@ app.get('/search', async (req, res) => {
         }
 
         if (categoryID) {
-            searchConditions.push({
+            search_conditions.push({
                 category_id: parseInt(categoryID, 10)
             });
         }
 
         const products = await prisma.products.findMany({
             where: {
-                OR: searchConditions
+                OR: search_conditions
             },
             select: {
                 product_id: true,
@@ -246,8 +246,8 @@ app.get('/search', async (req, res) => {
 
         // Fire-and-forget task to resize images asynchronously
         products.forEach(product => {
-            const imageName = path.basename(product.image_path);
-            resizeImageAsync(product.image_path, imageName);
+            const image_name = path.basename(product.image_path);
+            resize_image_async(product.image_path, image_name);
         });
 
         res.json(products);
@@ -266,6 +266,17 @@ app.post('/cart', async (req, res) => {
             return res.status(400).json({ error: 'userId, productId, and quantity are required' });
         }
 
+        // Check if the user exists, create if not
+        let user = await prisma.users.findUnique({
+            where: { userId: userId }
+        });
+
+        if (!user) {
+            user = await prisma.users.create({
+                data: { userId: userId }
+            });
+        }
+
         // Check if the product exists
         const product = await prisma.products.findUnique({
             where: { product_id: productId }
@@ -276,7 +287,34 @@ app.post('/cart', async (req, res) => {
         }
 
         // Fetch or create the cart for the user
-        let cart = await fetchOrCreateCart(userId);
+        let cart = await prisma.cart.findFirst({
+            where: { userId: userId },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
+
+        if (!cart) {
+            cart = await prisma.cart.create({
+                data: {
+                    userId: userId,
+                    cartItems: {
+                        create: []
+                    }
+                },
+                include: {
+                    cartItems: {
+                        include: {
+                            products: true
+                        }
+                    }
+                }
+            });
+        }
 
         if (quantity === 0) {
             // Remove the product from the cart
@@ -307,7 +345,16 @@ app.post('/cart', async (req, res) => {
         }
 
         // Retrieve the updated cart with cart items
-        cart = await fetchOrCreateCart(userId);
+        cart = await prisma.cart.findFirst({
+            where: { userId: userId },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
 
         console.log(`User ${userId} updated their cart with product ${productId} and quantity ${quantity}`);
         res.json(cart);
@@ -327,13 +374,90 @@ app.get('/cart', async (req, res) => {
         }
 
         // Fetch or create the user's cart with cart items
-        const cart = await fetchOrCreateCart(userId);
+        const cart = await fetch_or_create_cart(userId);
 
         console.log(`User ${userId} retrieved their cart items`);
         res.json(cart);
     } catch (err) {
         console.error('Error retrieving cart items:', err.message);
         res.status(500).json({ error: 'Error retrieving cart items', details: err.message });
+    }
+});
+
+// Shopping results endpoint (GET)
+app.get('/shopping-results', async (req, res) => {
+    try {
+        const { cartId, userId } = req.query; // Get cartId and userId from query parameters
+
+        if (!cartId || !userId) {
+            return res.status(400).json({ error: 'cartId and userId parameters are required' });
+        }
+
+        // Fetch the cart with cart items for the user
+        const cart = await prisma.cart.findUnique({
+            where: {
+                id: parseInt(cartId, 10),
+                userId: userId // Ensure userId is treated as a string
+            },
+            include: {
+                cartItems: {
+                    include: {
+                        products: {
+                            include: {
+                                product_store: {
+                                    include: {
+                                        stores: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!cart) {
+            return res.status(404).json({ error: 'Cart not found or does not belong to the user' });
+        }
+
+        // Group products by store
+        const store_products = cart.cartItems.reduce((acc, cartItem) => {
+            cartItem.products.product_store.forEach(productStore => {
+                const store_id = productStore.store_id;
+                if (!acc[store_id]) {
+                    acc[store_id] = {
+                        store_id: productStore.stores.store_id,
+                        store_name: productStore.stores.store_name,
+                        store_location: productStore.stores.store_location,
+                        products: [],
+                        total: 0
+                    };
+                }
+                acc[store_id].products.push({
+                    product_id: cartItem.product_id,
+                    product_name: cartItem.products.product_name,
+                    price: productStore.price,
+                    quantity: cartItem.quantity
+                });
+                acc[store_id].total += productStore.price * cartItem.quantity;
+            });
+            return acc;
+        }, {});
+
+        // Filter out stores that do not have all the products from the shopping list
+        const filtered_stores = Object.values(store_products).filter(store => {
+            const store_product_ids = store.products.map(product => product.product_id);
+            const cart_product_ids = cart.cartItems.map(cartItem => cartItem.product_id);
+            return cart_product_ids.every(productId => store_product_ids.includes(productId));
+        });
+
+        // Sort the filtered stores by total price
+        const sorted_stores = filtered_stores.sort((a, b) => a.total - b.total);
+
+        res.json(sorted_stores);
+    } catch (err) {
+        console.error('Error fetching shopping results:', err.message);
+        res.status(500).json({ error: 'Error fetching shopping results', details: err.message });
     }
 });
 
