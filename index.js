@@ -266,13 +266,15 @@ app.post('/cart', async (req, res) => {
             return res.status(400).json({ error: 'userId, productId, and quantity are required' });
         }
 
-        // Check if the user exists
-        const user = await prisma.users.findUnique({
+        // Check if the user exists, create if not
+        let user = await prisma.users.findUnique({
             where: { userId: userId }
         });
 
         if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+            user = await prisma.users.create({
+                data: { userId: userId }
+            });
         }
 
         // Check if the product exists
