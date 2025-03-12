@@ -386,17 +386,22 @@ app.get('/cart', async (req, res) => {
 
 // Shopping results endpoint (GET)
 app.get('/shopping-results', async (req, res) => {
-    try {
+    try { 
         const { cartId, userId } = req.query; // Get cartId and userId from query parameters
 
         if (!cartId || !userId) {
             return res.status(400).json({ error: 'cartId and userId parameters are required' });
         }
 
+        const parsedCartId = parseInt(cartId, 10);
+        if (isNaN(parsedCartId)) {
+            return res.status(400).json({ error: 'Invalid cartId parameter' });
+        }
+
         // Fetch the cart with cart items for the user
-        const cart = await prisma.cart.findUnique({
+        const cart = await prisma.cart.findFirst({
             where: {
-                id: parseInt(cartId, 10),
+                id: parsedCartId,
                 userId: userId // Ensure userId is treated as a string
             },
             include: {
