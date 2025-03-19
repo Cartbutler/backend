@@ -100,7 +100,11 @@ app.get('/categories', async (req, res) => {
             console.warn('No categories found in the database.');
         }
 
-        res.json(categories);
+        res.json(categories.map(category => ({
+            category_id: category.category_id,
+            category_name: category.category_name,
+            image_path: category.image_path
+        })));
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -134,7 +138,11 @@ app.get('/suggestions', async (req, res) => {
             take: 5 // Limit results
         });
 
-        res.json(p_suggestions);
+        res.json(p_suggestions.map(suggestion => ({
+            id: suggestion.id,
+            name: suggestion.name,
+            priority: suggestion.priority
+        })));
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -204,10 +212,10 @@ app.get('/product', async (req, res) => {
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
-        const { query, categoryID } = req.query; // Get query and categoryID parameters
+        const { query, category_id } = req.query; // Get query and category_id parameters
 
-        if (!query && !categoryID) {
-            return res.status(400).json({ error: 'At least one of query or categoryID parameter is required' });
+        if (!query && !category_id) {
+            return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
         }
 
         const search_conditions = [];
@@ -223,9 +231,9 @@ app.get('/search', async (req, res) => {
             });
         }
 
-        if (categoryID) {
+        if (category_id) {
             search_conditions.push({
-                category_id: parseInt(categoryID, 10)
+                category_id: parseInt(category_id, 10)
             });
         }
 
@@ -250,7 +258,12 @@ app.get('/search', async (req, res) => {
             resize_image_async(product.image_path, image_name);
         });
 
-        res.json(products);
+        res.json(products.map(product => ({
+            product_id: product.product_id,
+            product_name: product.product_name,
+            image_path: product.image_path,
+            price: product.price
+        })));
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -260,26 +273,26 @@ app.get('/search', async (req, res) => {
 // Add to shopping cart endpoint (POST)
 app.post('/cart', async (req, res) => {
     try {
-        const { userId, productId, quantity } = req.body;
+        const { user_id, product_id, quantity } = req.body;
 
-        if (!userId || !productId || quantity === undefined) {
-            return res.status(400).json({ error: 'userId, productId, and quantity are required' });
+        if (!user_id || !product_id || quantity === undefined) {
+            return res.status(400).json({ error: 'user_id, product_id, and quantity are required' });
         }
 
         // Check if the user exists, create if not
         let user = await prisma.users.findUnique({
-            where: { userId: userId }
+            where: { userId: user_id }
         });
 
         if (!user) {
             user = await prisma.users.create({
-                data: { userId: userId }
+                data: { userId: user_id }
             });
         }
 
         // Check if the product exists
         const product = await prisma.products.findUnique({
-            where: { product_id: productId }
+            where: { product_id: product_id }
         });
 
         if (!product) {
@@ -288,7 +301,7 @@ app.post('/cart', async (req, res) => {
 
         // Fetch or create the cart for the user
         let cart = await prisma.cart.findFirst({
-            where: { userId: userId },
+            where: { userId: user_id },
             include: {
                 cartItems: {
                     include: {
@@ -301,7 +314,7 @@ app.post('/cart', async (req, res) => {
         if (!cart) {
             cart = await prisma.cart.create({
                 data: {
-                    userId: userId,
+                    userId: user_id,
                     cartItems: {
                         create: []
                     }
@@ -321,7 +334,7 @@ app.post('/cart', async (req, res) => {
             await prisma.cartItems.deleteMany({
                 where: {
                     cartId: cart.id,
-                    productId: productId
+                    productId: product_id
                 }
             });
         } else {
@@ -330,7 +343,7 @@ app.post('/cart', async (req, res) => {
                 where: {
                     cartId_productId: {
                         cartId: cart.id,
-                        productId: productId
+                        productId: product_id
                     }
                 },
                 update: {
@@ -338,7 +351,7 @@ app.post('/cart', async (req, res) => {
                 },
                 create: {
                     cartId: cart.id,
-                    productId: productId,
+                    productId: product_id,
                     quantity: quantity
                 }
             });
@@ -346,7 +359,7 @@ app.post('/cart', async (req, res) => {
 
         // Retrieve the updated cart with cart items
         cart = await prisma.cart.findFirst({
-            where: { userId: userId },
+            where: { userId: user_id },
             include: {
                 cartItems: {
                     include: {
@@ -356,7 +369,7 @@ app.post('/cart', async (req, res) => {
             }
         });
 
-        console.log(`User ${userId} updated their cart with product ${productId} and quantity ${quantity}`);
+        console.log(`User ${user_id} updated their cart with product ${product_id} and quantity ${quantity}`);
         res.json(cart);
     } catch (err) {
         console.error('Error updating cart:', err.message);
@@ -367,16 +380,16 @@ app.post('/cart', async (req, res) => {
 // Get shopping cart endpoint (GET)
 app.get('/cart', async (req, res) => {
     try {
-        const { userId } = req.query;
+        const { user_id } = req.query;
 
-        if (!userId) {
-            return res.status(400).json({ error: 'userId is required' });
+        if (!user_id) {
+            return res.status(400).json({ error: 'user_id is required' });
         }
 
         // Fetch or create the user's cart with cart items
-        const cart = await fetch_or_create_cart(userId);
+        const cart = await fetch_or_create_cart(user_id);
 
-        console.log(`User ${userId} retrieved their cart items`);
+        console.log(`User ${user_id} retrieved their cart items`);
         res.json(cart);
     } catch (err) {
         console.error('Error retrieving cart items:', err.message);
@@ -387,22 +400,22 @@ app.get('/cart', async (req, res) => {
 // Shopping results endpoint (GET)
 app.get('/shopping-results', async (req, res) => {
     try { 
-        const { cartId, userId } = req.query; // Get cartId and userId from query parameters
+        const { cart_id, user_id } = req.query; // Get cart_id and user_id from query parameters
 
-        if (!cartId || !userId) {
-            return res.status(400).json({ error: 'cartId and userId parameters are required' });
+        if (!cart_id || !user_id) {
+            return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
         }
 
-        const parsedCartId = parseInt(cartId, 10);
-        if (isNaN(parsedCartId)) {
-            return res.status(400).json({ error: 'Invalid cartId parameter' });
+        const parsed_cart_id = parseInt(cart_id, 10);
+        if (isNaN(parsed_cart_id)) {
+            return res.status(400).json({ error: 'Invalid cart_id parameter' });
         }
 
         // Fetch the cart with cart items for the user
         const cart = await prisma.cart.findFirst({
             where: {
-                id: parsedCartId,
-                userId: userId // Ensure userId is treated as a string
+                id: parsed_cart_id,
+                userId: user_id // Ensure user_id is treated as a string
             },
             include: {
                 cartItems: {
