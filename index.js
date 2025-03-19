@@ -1,213 +1,490 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // Import the cors package
 const { PrismaClient } = require('@prisma/client');
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { Storage } = require('@google-cloud/storage');
-const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
-const sharp = require('sharp');
+const sharp = require('sharp'); // Add sharp for image processing
 const app = express();
 const port = process.env.PORT || 5000;
-const host = 'localhost'; // Bind to localhost
+const host = process.env.HOST || 'localhost'; // Bind to localhost
 
 app.use(express.json());
 app.use(cors()); // Enable CORS for all routes
 
 const prisma = new PrismaClient();
 
-// Access the secret from Secret Manager
-async function accessSecretVersion() {
-    const client = new SecretManagerServiceClient();
-    try {
-        const [version] = await client.accessSecretVersion({
-            name: 'projects/southern-shard-449119-d4/secrets/service-account-key/versions/latest',
-        });
+// Set up Google Cloud Storage
+const storage = new Storage();
+const bucket_name = process.env.GCLOUD_STORAGE_BUCKET; // Replace with your actual bucket name
+const bucket = storage.bucket(bucket_name);
 
-        const payload = version.payload.data.toString('utf8');
-        const keyFilePath = path.join(__dirname, 'service-account-key.json');
-        fs.writeFileSync(keyFilePath, payload);
-        process.env.GOOGLE_APPLICATION_CREDENTIALS = keyFilePath;
+// Function to resize an image asynchronously
+async function resize_image_async(image_url, image_name) {
+    try {
+        const fetch = (await import('node-fetch')).default; // Dynamically import node-fetch
+        const response = await fetch(image_url);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image from URL: ${image_url}`);
+        }
+        const buffer = await response.buffer();
+
+        const resized_buffer = await sharp(buffer)
+            .resize(160, 160)
+            .toBuffer();
+
+        const resized_image_name = `160x160-${image_name}`;
+        const resized_image_blob = bucket.file(resized_image_name);
+
+        // Check if the resized image already exists
+        const [exists] = await resized_image_blob.exists();
+        if (!exists) {
+            await resized_image_blob.save(resized_buffer);
+        }
     } catch (err) {
-        console.error('Failed to access secret:', err);
-        throw new Error('Failed to access secret');
+        console.error('Image resizing error:', err.message);
     }
 }
 
-// Call the function to access the secret
-accessSecretVersion().then(() => {
-    // Set up Google Cloud Storage
-    const storage = new Storage();
-    const bucketName = 'southern-shard-449119-d4.appspot.com'; // Replace with your actual bucket name
-    const bucket = storage.bucket(bucketName);
-
-    // Set up multer for file uploads
-    const multerStorage = multer.memoryStorage();
-    const upload = multer({ storage: multerStorage });
-
-    // Serve static files from the "uploads" directory
-    app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-    // Root route
-    app.get('/', (req, res) => {
-        res.send('Welcome to the CartButler API this screen is just a landing page');
-    });
-
-    // Endpoint to upload an image
-    app.post('/upload', upload.single('image'), async (req, res) => {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
-
-        const timestamp = Date.now();
-        const originalFilename = `${timestamp}${path.extname(req.file.originalname)}`;
-        const lowResFilename = `${timestamp}-lowres${path.extname(req.file.originalname)}`;
-
-        const originalBlob = bucket.file(originalFilename);
-        const lowResBlob = bucket.file(lowResFilename);
-
-        const originalBlobStream = originalBlob.createWriteStream({
-            resumable: false,
-        });
-
-        const lowResBlobStream = lowResBlob.createWriteStream({
-            resumable: false,
-        });
-
-        // Handle errors for original image upload
-        originalBlobStream.on('error', (err) => {
-            console.error('Upload error:', err);
-            res.status(500).json({ error: 'Upload error', details: err.message });
-        });
-
-        // Handle errors for low-res image upload
-        lowResBlobStream.on('error', (err) => {
-            console.error('Upload error:', err);
-            res.status(500).json({ error: 'Upload error', details: err.message });
-        });
-
-        // Finish event for original image upload
-        originalBlobStream.on('finish', () => {
-            const originalUrl = `https://storage.googleapis.com/${bucket.name}/${originalBlob.name}`;
-            const lowResUrl = `https://storage.googleapis.com/${bucket.name}/${lowResBlob.name}`;
-
-            res.json({ originalUrl, lowResUrl });
-        });
-
-        // Resize the image to low resolution and upload both versions
-        sharp(req.file.buffer)
-            .resize(800) // Resize to 800px width for low resolution
-            .toBuffer()
-            .then((lowResBuffer) => {
-                lowResBlobStream.end(lowResBuffer);
-            })
-            .catch((err) => {
-                console.error('Sharp error:', err);
-                res.status(500).json({ error: 'Image processing error', details: err.message });
-            });
-
-        // Upload the original image
-        originalBlobStream.end(req.file.buffer);
-    });
-
-    // Example endpoint to list all categories
-    app.get('/categories', async (req, res) => {
-        try {
-            const categories = await prisma.categories.findMany();
-            res.json(categories);
-        } catch (err) {
-            console.error('Database query error:', err.message);
-            res.status(500).json({ error: 'Database query error', details: err.message });
-        }
-    });
-
-    // Product suggestions endpoint with multi-word search support
-    app.get('/suggestions', async (req, res) => {
-        try {
-            const { query } = req.query; // Get query parameter
-
-            if (!query) {
-                return res.status(400).json({ error: 'Query parameter is required' });
-            }
-
-            const searchTerms = query.split(/\s+/); // Format to split with whitespace
-
-            const conditions = searchTerms.map(term => ({
-                name: {
-                    contains: term.toLowerCase()
+async function fetch_or_create_cart(user_id) {
+    let cart = await prisma.cart.findFirst({
+        where: { userId: user_id },
+        include: {
+            cartItems: {
+                include: {
+                    products: true
                 }
-            }));
+            }
+        }
+    });
 
-            const pSuggestions = await prisma.pSuggestions.findMany({
-                where: {
-                    OR: conditions
+    if (!cart) {
+        cart = await prisma.cart.create({
+            data: {
+                userId: user_id,
+                cartItems: []
+            },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
+    }
+
+    return cart;
+}
+
+// Root route
+app.get('/', (req, res) => {
+    res.send('Welcome to the CartButler API this screen is just a landing page');
+});
+
+// Example endpoint to list all categories
+app.get('/categories', async (req, res) => {
+    try {
+        const categories = await prisma.categories.findMany({
+            select: {
+                category_id: true,
+                category_name: true,
+                image_path: true, // Include image_path in the response
+            }
+        });
+
+        console.log('Categories fetched:', categories); // Log the fetched categories
+
+        if (categories.length === 0) {
+            console.warn('No categories found in the database.');
+        }
+
+        res.json(categories.map(category => ({
+            category_id: category.category_id,
+            category_name: category.category_name,
+            image_path: category.image_path
+        })));
+    } catch (err) {
+        console.error('Database query error:', err.message);
+        res.status(500).json({ error: 'Database query error', details: err.message });
+    }
+});
+
+// Product suggestions endpoint with multi-word search support
+app.get('/suggestions', async (req, res) => {
+    try {
+        const { query } = req.query; // Get query parameter
+
+        if (!query) {
+            return res.status(400).json({ error: 'Query parameter is required' });
+        }
+
+        const search_terms = query.split(/\s+/); // Format to split with whitespace
+
+        const conditions = search_terms.map(term => ({
+            name: {
+                contains: term.toLowerCase()
+            }
+        }));
+
+        const p_suggestions = await prisma.pSuggestions.findMany({
+            where: {
+                OR: conditions
+            },
+            orderBy: {
+                priority: 'desc' // Sorting by priority
+            },
+            take: 5 // Limit results
+        });
+
+        res.json(p_suggestions.map(suggestion => ({
+            id: suggestion.id,
+            name: suggestion.name,
+            priority: suggestion.priority
+        })));
+    } catch (err) {
+        console.error('Database query error:', err.message);
+        res.status(500).json({ error: 'Database query error', details: err.message });
+    }
+});
+
+// Single product endpoint to get product details by ID or query
+app.get('/product', async (req, res) => {
+    try {
+        const { id } = req.query; // Get id parameter
+
+        if (!id) {
+            return res.status(400).json({ error: 'id parameter is required' });
+        }
+
+        const product = await prisma.products.findUnique({
+            where: {
+                product_id: parseInt(id, 10)
+            },
+            include: {
+                product_store: {
+                    include: {
+                        stores: true
+                    }
+                }
+            }
+        });
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        // Calculate min and max prices
+        const prices = product.product_store.map(ps => ps.price);
+        const min_price = Math.min(...prices);
+        const max_price = Math.max(...prices);
+
+        // Prepare response data
+        const response_data = {
+            product_id: product.product_id,
+            product_name: product.product_name,
+            description: product.description,
+            price: product.price,
+            stock: product.stock,
+            category_id: product.category_id,
+            image_path: product.image_path,
+            created_at: product.created_at,
+            category_name: product.category_name,
+            stores: product.product_store.map(ps => ({
+                store_id: ps.store_id,
+                price: ps.price,
+                stock: ps.stock,
+                store_name: ps.stores.store_name,
+                store_location: ps.stores.store_location
+            })),
+            min_price,
+            max_price
+        };
+
+        res.json(response_data);
+    } catch (err) {
+        console.error('Database query error:', err.message);
+        res.status(500).json({ error: 'Database query error', details: err.message });
+    }
+});
+
+// Search endpoint to search for products
+app.get('/search', async (req, res) => {
+    try {
+        const { query, category_id } = req.query; // Get query and category_id parameters
+
+        if (!query && !category_id) {
+            return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
+        }
+
+        const search_conditions = [];
+
+        if (query) {
+            const search_terms = query.split(/\s+/); // Split query into search terms
+            search_terms.forEach(term => {
+                search_conditions.push({
+                    product_name: {
+                        contains: term.toLowerCase()
+                    }
+                });
+            });
+        }
+
+        if (category_id) {
+            search_conditions.push({
+                category_id: parseInt(category_id, 10)
+            });
+        }
+
+        const products = await prisma.products.findMany({
+            where: {
+                OR: search_conditions
+            },
+            select: {
+                product_id: true,
+                product_name: true,
+                image_path: true,
+                price: true,
+            },
+            orderBy: {
+                created_at: 'desc' // Sorting by creation date
+            }
+        });
+
+        // Fire-and-forget task to resize images asynchronously
+        products.forEach(product => {
+            const image_name = path.basename(product.image_path);
+            resize_image_async(product.image_path, image_name);
+        });
+
+        res.json(products.map(product => ({
+            product_id: product.product_id,
+            product_name: product.product_name,
+            image_path: product.image_path,
+            price: product.price
+        })));
+    } catch (err) {
+        console.error('Database query error:', err.message);
+        res.status(500).json({ error: 'Database query error', details: err.message });
+    }
+});
+
+// Add to shopping cart endpoint (POST)
+app.post('/cart', async (req, res) => {
+    try {
+        const { user_id, product_id, quantity } = req.body;
+
+        if (!user_id || !product_id || quantity === undefined) {
+            return res.status(400).json({ error: 'user_id, product_id, and quantity are required' });
+        }
+
+        // Check if the user exists, create if not
+        let user = await prisma.users.findUnique({
+            where: { userId: user_id }
+        });
+
+        if (!user) {
+            user = await prisma.users.create({
+                data: { userId: user_id }
+            });
+        }
+
+        // Check if the product exists
+        const product = await prisma.products.findUnique({
+            where: { product_id: product_id }
+        });
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        // Fetch or create the cart for the user
+        let cart = await prisma.cart.findFirst({
+            where: { userId: user_id },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
+
+        if (!cart) {
+            cart = await prisma.cart.create({
+                data: {
+                    userId: user_id,
+                    cartItems: {
+                        create: []
+                    }
                 },
-                orderBy: {
-                    priority: 'desc' // Sorting by priority
-                }
-            });
-
-            res.json(pSuggestions);
-        } catch (err) {
-            console.error('Database query error:', err.message);
-            res.status(500).json({ error: 'Database query error', details: err.message });
-        }
-    });
-
-    // Search endpoint to search for products
-    app.get('/search', async (req, res) => {
-        try {
-            const { query, categoryID } = req.query; // Get query and categoryID parameters
-
-            if (!query && !categoryID) {
-                return res.status(400).json({ error: 'At least one of query or categoryID parameter is required' });
-            }
-
-            const searchConditions = [];
-
-            if (query) {
-                const searchTerms = query.split(/\s+/); // Split query into search terms
-                searchTerms.forEach(term => {
-                    searchConditions.push({
-                        product_name: {
-                            contains: term.toLowerCase()
+                include: {
+                    cartItems: {
+                        include: {
+                            products: true
                         }
-                    });
-                });
-            }
-
-            if (categoryID) {
-                searchConditions.push({
-                    category_id: parseInt(categoryID, 10)
-                });
-            }
-
-            const products = await prisma.products.findMany({
-                where: {
-                    OR: searchConditions
-                },
-                orderBy: {
-                    created_at: 'desc' // Sorting by creation date
+                    }
                 }
             });
-
-            res.json(products);
-        } catch (err) {
-            console.error('Database query error:', err.message);
-            res.status(500).json({ error: 'Database query error', details: err.message });
         }
-    });
 
-    // Error handling middleware
-    app.use((err, req, res, next) => {
-        console.error(err.stack);
-        res.status(500).send('Something broke!');
-    });
+        if (quantity === 0) {
+            // Remove the product from the cart
+            await prisma.cartItems.deleteMany({
+                where: {
+                    cartId: cart.id,
+                    productId: product_id
+                }
+            });
+        } else {
+            // Add or update the product in the user's cart
+            await prisma.cartItems.upsert({
+                where: {
+                    cartId_productId: {
+                        cartId: cart.id,
+                        productId: product_id
+                    }
+                },
+                update: {
+                    quantity: quantity // Set the quantity directly
+                },
+                create: {
+                    cartId: cart.id,
+                    productId: product_id,
+                    quantity: quantity
+                }
+            });
+        }
 
-    app.listen(port, host, () => {
-        console.log(`Server is running on http://${host}:${port}`);
-    });
-}).catch(err => {
-    console.error('Failed to access secret:', err);
+        // Retrieve the updated cart with cart items
+        cart = await prisma.cart.findFirst({
+            where: { userId: user_id },
+            include: {
+                cartItems: {
+                    include: {
+                        products: true
+                    }
+                }
+            }
+        });
+
+        console.log(`User ${user_id} updated their cart with product ${product_id} and quantity ${quantity}`);
+        res.json(cart);
+    } catch (err) {
+        console.error('Error updating cart:', err.message);
+        res.status(500).json({ error: 'Error updating cart', details: err.message });
+    }
+});
+
+// Get shopping cart endpoint (GET)
+app.get('/cart', async (req, res) => {
+    try {
+        const { user_id } = req.query;
+
+        if (!user_id) {
+            return res.status(400).json({ error: 'user_id is required' });
+        }
+
+        // Fetch or create the user's cart with cart items
+        const cart = await fetch_or_create_cart(user_id);
+
+        console.log(`User ${user_id} retrieved their cart items`);
+        res.json(cart);
+    } catch (err) {
+        console.error('Error retrieving cart items:', err.message);
+        res.status(500).json({ error: 'Error retrieving cart items', details: err.message });
+    }
+});
+
+// Shopping results endpoint (GET)
+app.get('/shopping-results', async (req, res) => {
+    try { 
+        const { cart_id, user_id } = req.query; // Get cart_id and user_id from query parameters
+
+        if (!cart_id || !user_id) {
+            return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
+        }
+
+        const parsed_cart_id = parseInt(cart_id, 10);
+        if (isNaN(parsed_cart_id)) {
+            return res.status(400).json({ error: 'Invalid cart_id parameter' });
+        }
+
+        // Fetch the cart with cart items for the user
+        const cart = await prisma.cart.findFirst({
+            where: {
+                id: parsed_cart_id,
+                userId: user_id // Ensure user_id is treated as a string
+            },
+            include: {
+                cartItems: {
+                    include: {
+                        products: {
+                            include: {
+                                product_store: {
+                                    include: {
+                                        stores: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!cart) {
+            return res.status(404).json({ error: 'Cart not found or does not belong to the user' });
+        }
+
+        // Group products by store
+        const store_products = cart.cartItems.reduce((acc, cartItem) => {
+            cartItem.products.product_store.forEach(productStore => {
+                const store_id = productStore.store_id;
+                if (!acc[store_id]) {
+                    acc[store_id] = {
+                        store_id: productStore.stores.store_id,
+                        store_name: productStore.stores.store_name,
+                        store_location: productStore.stores.store_location,
+                        products: [],
+                        total: 0
+                    };
+                }
+                acc[store_id].products.push({
+                    product_id: cartItem.product_id,
+                    product_name: cartItem.products.product_name,
+                    price: productStore.price,
+                    quantity: cartItem.quantity
+                });
+                acc[store_id].total += productStore.price * cartItem.quantity;
+            });
+            return acc;
+        }, {});
+
+        // Filter out stores that do not have all the products from the shopping list
+        const filtered_stores = Object.values(store_products).filter(store => {
+            const store_product_ids = store.products.map(product => product.product_id);
+            const cart_product_ids = cart.cartItems.map(cartItem => cartItem.product_id);
+            return cart_product_ids.every(productId => store_product_ids.includes(productId));
+        });
+
+        // Sort the filtered stores by total price
+        const sorted_stores = filtered_stores.sort((a, b) => a.total - b.total);
+
+        res.json(sorted_stores);
+    } catch (err) {
+        console.error('Error fetching shopping results:', err.message);
+        res.status(500).json({ error: 'Error fetching shopping results', details: err.message });
+    }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
+});
+
+app.listen(port, host, () => {
+    console.log(`Server is running on http://${host}:${port}`);
 });
