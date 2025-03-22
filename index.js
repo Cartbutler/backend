@@ -83,7 +83,7 @@ app.get('/', (req, res) => {
     res.send('Welcome to the CartButler API this screen is just a landing page');
 });
 
-// Example endpoint to list all categories
+// Categories endpoint.
 app.get('/categories', async (req, res) => {
     try {
         const categories = await prisma.categories.findMany({
@@ -469,8 +469,11 @@ app.get('/shopping-results', async (req, res) => {
             return cart_product_ids.every(productId => store_product_ids.includes(productId));
         });
 
+        // Filter out stores with zero products
+        const non_empty_stores = filtered_stores.filter(store => store.products.length > 0);
+
         // Sort the filtered stores by total price
-        const sorted_stores = filtered_stores.sort((a, b) => a.total - b.total);
+        const sorted_stores = non_empty_stores.sort((a, b) => a.total - b.total);
 
         res.json(sorted_stores);
     } catch (err) {
