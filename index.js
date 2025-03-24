@@ -196,7 +196,8 @@ app.get('/product', async (req, res) => {
                 price: ps.price,
                 stock: ps.stock,
                 store_name: ps.stores.store_name,
-                store_location: ps.stores.store_location
+                store_location: ps.stores.store_location,
+                store_image: ps.stores.store_image // Include store_image in the response
             })),
             minPrice,
             maxPrice
@@ -447,6 +448,7 @@ app.get('/shopping-results', async (req, res) => {
                         store_id: productStore.stores.store_id,
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
+                        store_image: productStore.stores.store_image, // Include store_image in the response
                         products: [],
                         total: 0
                     };

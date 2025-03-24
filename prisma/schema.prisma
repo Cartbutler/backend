@@ -126,6 +126,7 @@ model stores {
   store_name     String          @db.VarChar(255)
   store_location String          @db.VarChar(255)
   store_adress   String?         @db.VarChar(255)
+  store_image    String?         @db.VarChar(255)
   product_store  product_store[]
 }
 
