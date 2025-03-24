@@ -65,14 +65,6 @@ model employees {
   phone  String @db.VarChar(255)
 }
 
-model grocery_stores {
-  store_id    Int      @id
-  store_name  String   @db.VarChar(255)
-  address     String   @db.VarChar(255)
-  rank        Int
-  date_joined DateTime @default(now()) @db.DateTime(0)
-}
-
 model orders {
   order_id       Int        @id
   customer_id    Int?
