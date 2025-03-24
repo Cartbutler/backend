@@ -86,11 +86,17 @@ app.get('/', (req, res) => {
 // Categories endpoint.
 app.get('/categories', async (req, res) => {
     try {
+        const { language_id = 'eng' } = req.query; // Get language_id parameter or default to 'eng'
+
         const categories = await prisma.categories.findMany({
+            where: {
+                language_id: language_id
+            },
             select: {
                 category_id: true,
                 category_name: true,
                 image_path: true, // Include image_path in the response
+                language_id: true // Include language_id in the response
             }
         });
 
@@ -103,7 +109,8 @@ app.get('/categories', async (req, res) => {
         res.json(categories.map(category => ({
             category_id: category.category_id,
             category_name: category.category_name,
-            image_path: category.image_path
+            image_path: category.image_path,
+            language_id: category.language_id // Include language_id in the response
         })));
     } catch (err) {
         console.error('Database query error:', err.message);
@@ -152,7 +159,7 @@ app.get('/suggestions', async (req, res) => {
 // Single product endpoint to get product details by ID or query
 app.get('/product', async (req, res) => {
     try {
-        const { id } = req.query; // Get id parameter
+        const { id, language_id = 'eng' } = req.query; // Get id and language_id parameters or default to 'eng'
 
         if (!id) {
             return res.status(400).json({ error: 'id parameter is required' });
@@ -160,7 +167,8 @@ app.get('/product', async (req, res) => {
 
         const product = await prisma.products.findUnique({
             where: {
-                product_id: parseInt(id, 10)
+                product_id: parseInt(id, 10),
+                language_id: language_id
             },
             include: {
                 product_store: {
@@ -175,22 +183,24 @@ app.get('/product', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        // Calculate min and max prices
+        // Calculate min and max prices from product_store table
         const prices = product.product_store.map(ps => ps.price);
-        const minPrice = Math.min(...prices);
-        const maxPrice = Math.max(...prices);
+        const min_price = Math.min(...prices);
+        const max_price = Math.max(...prices);
 
         // Prepare response data
         const responseData = {
             product_id: product.product_id,
             product_name: product.product_name,
             description: product.description,
-            price: product.price,
+            min_price, // Include min_price below description
+            max_price, // Include max_price below description
             stock: product.stock,
             category_id: product.category_id,
             image_path: product.image_path,
             created_at: product.created_at,
             category_name: product.category_name,
+            language_id: product.language_id, // Include language_id in the response
             stores: product.product_store.map(ps => ({
                 store_id: ps.store_id,
                 price: ps.price,
@@ -198,9 +208,7 @@ app.get('/product', async (req, res) => {
                 store_name: ps.stores.store_name,
                 store_location: ps.stores.store_location,
                 store_image: ps.stores.store_image // Include store_image in the response
-            })),
-            minPrice,
-            maxPrice
+            }))
         };
 
         res.json(responseData);
@@ -213,7 +221,7 @@ app.get('/product', async (req, res) => {
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
-        const { query, category_id } = req.query; // Get query and category_id parameters
+        const { query, category_id, language_id = 'eng' } = req.query; // Get query, category_id, and language_id parameters or default to 'eng'
 
         if (!query && !category_id) {
             return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
@@ -240,13 +248,14 @@ app.get('/search', async (req, res) => {
 
         const products = await prisma.products.findMany({
             where: {
-                OR: search_conditions
+                OR: search_conditions,
+                language_id: language_id
             },
             select: {
                 product_id: true,
                 product_name: true,
                 image_path: true,
-                price: true,
+                language_id: true // Include language_id in the response
             },
             orderBy: {
                 created_at: 'desc' // Sorting by creation date
@@ -259,11 +268,31 @@ app.get('/search', async (req, res) => {
             resize_image_async(product.image_path, image_name);
         });
 
-        res.json(products.map(product => ({
+        // Calculate min and max prices for each product from product_store table
+        const productsWithPrices = await Promise.all(products.map(async product => {
+            const productStores = await prisma.product_store.findMany({
+                where: { product_id: product.product_id },
+                select: { price: true }
+            });
+
+            const prices = productStores.map(ps => ps.price);
+            const min_price = Math.min(...prices);
+            const max_price = Math.max(...prices);
+
+            return {
+                ...product,
+                min_price,
+                max_price
+            };
+        }));
+
+        res.json(productsWithPrices.map(product => ({
             product_id: product.product_id,
             product_name: product.product_name,
             image_path: product.image_path,
-            price: product.price
+            language_id: product.language_id, // Include language_id in the response
+            min_price: product.min_price,
+            max_price: product.max_price
         })));
     } catch (err) {
         console.error('Database query error:', err.message);
@@ -282,12 +311,12 @@ app.post('/cart', async (req, res) => {
 
         // Check if the user exists, create if not
         let user = await prisma.users.findUnique({
-            where: { userId: user_id }
+            where: { user_id: user_id }
         });
 
         if (!user) {
             user = await prisma.users.create({
-                data: { userId: user_id }
+                data: { user_id: user_id }
             });
         }
 
@@ -302,7 +331,7 @@ app.post('/cart', async (req, res) => {
 
         // Fetch or create the cart for the user
         let cart = await prisma.cart.findFirst({
-            where: { userId: user_id },
+            where: { user_id: user_id },
             include: {
                 cartItems: {
                     include: {
@@ -315,7 +344,7 @@ app.post('/cart', async (req, res) => {
         if (!cart) {
             cart = await prisma.cart.create({
                 data: {
-                    userId: user_id,
+                    user_id: user_id,
                     cartItems: {
                         create: []
                     }
@@ -334,25 +363,25 @@ app.post('/cart', async (req, res) => {
             // Remove the product from the cart
             await prisma.cartItems.deleteMany({
                 where: {
-                    cartId: cart.id,
-                    productId: product_id
+                    cart_id: cart.id,
+                    product_id: product_id
                 }
             });
         } else {
             // Add or update the product in the user's cart
             await prisma.cartItems.upsert({
                 where: {
-                    cartId_productId: {
-                        cartId: cart.id,
-                        productId: product_id
+                    cart_id_product_id: {
+                        cart_id: cart.id,
+                        product_id: product_id
                     }
                 },
                 update: {
                     quantity: quantity // Set the quantity directly
                 },
                 create: {
-                    cartId: cart.id,
-                    productId: product_id,
+                    cart_id: cart.id,
+                    product_id: product_id,
                     quantity: quantity
                 }
             });
@@ -360,7 +389,7 @@ app.post('/cart', async (req, res) => {
 
         // Retrieve the updated cart with cart items
         cart = await prisma.cart.findFirst({
-            where: { userId: user_id },
+            where: { user_id: user_id },
             include: {
                 cartItems: {
                     include: {
@@ -416,7 +445,7 @@ app.get('/shopping-results', async (req, res) => {
         const cart = await prisma.cart.findFirst({
             where: {
                 id: parsed_cart_id,
-                userId: user_id // Ensure user_id is treated as a string
+                user_id: user_id // Ensure user_id is treated as a string
             },
             include: {
                 cartItems: {
