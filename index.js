@@ -177,11 +177,11 @@ app.get('/product', async (req, res) => {
 
         // Calculate min and max prices
         const prices = product.product_store.map(ps => ps.price);
-        const min_price = Math.min(...prices);
-        const max_price = Math.max(...prices);
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
 
         // Prepare response data
-        const response_data = {
+        const responseData = {
             product_id: product.product_id,
             product_name: product.product_name,
             description: product.description,
@@ -198,11 +198,11 @@ app.get('/product', async (req, res) => {
                 store_name: ps.stores.store_name,
                 store_location: ps.stores.store_location
             })),
-            min_price,
-            max_price
+            minPrice,
+            maxPrice
         };
 
-        res.json(response_data);
+        res.json(responseData);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -466,7 +466,7 @@ app.get('/shopping-results', async (req, res) => {
         const filtered_stores = Object.values(store_products).filter(store => {
             const store_product_ids = store.products.map(product => product.product_id);
             const cart_product_ids = cart.cartItems.map(cartItem => cartItem.product_id);
-            return cart_product_ids.every(productId => store_product_ids.includes(productId));
+            return cart_product_ids.every(product_id => store_product_ids.includes(product_id));
         });
 
         // Filter out stores with zero products
