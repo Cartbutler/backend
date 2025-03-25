@@ -66,7 +66,7 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   Returns a list of all categories.
 
   ```sh
-  curl http://localhost:5000/categories
+  curl http://localhost:5000/categories?language_id=en-US
   ```
 
 ### Product Suggestions
@@ -84,7 +84,7 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   Searches for products based on a query or categoryID parameter. At least one of the parameters is required. The endpoint returns products based on the provided parameters, limited to 10 results, and sorted by creation date.
 
   ```sh
-  curl http://localhost:5000/search?query=example&categoryID=1
+  curl http://localhost:5000/search?query=example&category_id=1&language_id=en-US
   ```
 
 ### Single Product Details
@@ -93,7 +93,7 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   Returns product details by ID.
 
   ```sh
-  curl http://localhost:5000/product?id=1
+  curl http://localhost:5000/product?id=1&language_id=en-US
   ```
 
 ### Add to Shopping Cart
@@ -102,31 +102,25 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
   Adds an item to the shopping cart or updates the quantity if the item already exists. If the quantity is set to 0, the item is removed from the cart.
 
   ```sh
-  curl -X POST http://localhost:5000/cart -H "Content-Type: application/json" -d '{"userId": "1", "productId": "1", "quantity": 2}'
+  curl -X POST http://localhost:5000/cart -H "Content-Type: application/json" -d '{"user_id": "1", "product_id": "1", "quantity": 2}'
   ```
 
-### Get Shopping Cart Item
+### Get Shopping Cart Items
 - **GET /cart**
 
-  Retrieves a single cart item for a user.
+  Retrieves the shopping cart items for a user.
 
   ```sh
-  curl http://localhost:5000/cart?userId=<USER ID>
+  curl http://localhost:5000/cart?user_id=<USER_ID>
   ```
 
 ### Shopping Results
-- **POST /shopping-results**
+- **GET /shopping-results**
 
   Calculates and returns the smallest shopping list price sorted by store price. The endpoint accepts a list of products with their quantities in the request body.
 
   ```sh
-  curl -X POST http://localhost:5000/shopping-results -H "Content-Type: application/json" -d '{
-    "products": [
-      { "productId": 1, "quantity": 2 },
-      { "productId": 2, "quantity": 1 },
-      { "productId": 3, "quantity": 3 }
-    ]
-  }'
+  curl -X GET http://localhost:5000/shopping-results?cart_id=<CART_ID>&user_id=<USER_ID>
   ```
 
 ## Environment Variables

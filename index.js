@@ -49,7 +49,7 @@ async function resize_image_async(image_url, image_name) {
 
 async function fetch_or_create_cart(user_id) {
     let cart = await prisma.cart.findFirst({
-        where: { userId: user_id },
+        where: { user_id: user_id },
         include: {
             cartItems: {
                 include: {
@@ -62,7 +62,7 @@ async function fetch_or_create_cart(user_id) {
     if (!cart) {
         cart = await prisma.cart.create({
             data: {
-                userId: user_id,
+                user_id: user_id,
                 cartItems: []
             },
             include: {
@@ -86,11 +86,16 @@ app.get('/', (req, res) => {
 // Categories endpoint.
 app.get('/categories', async (req, res) => {
     try {
+        const { language_id = 'en-US' } = req.query; // Get language_id parameter or default to 'en-US'
+
         const categories = await prisma.categories.findMany({
+            where: {
+                language_id: language_id
+            },
             select: {
                 category_id: true,
                 category_name: true,
-                image_path: true, // Include image_path in the response
+                image_path: true // Include image_path in the response
             }
         });
 
@@ -152,7 +157,7 @@ app.get('/suggestions', async (req, res) => {
 // Single product endpoint to get product details by ID or query
 app.get('/product', async (req, res) => {
     try {
-        const { id } = req.query; // Get id parameter
+        const { id, language_id = 'en-US' } = req.query; // Get id and language_id parameters or default to 'en-US'
 
         if (!id) {
             return res.status(400).json({ error: 'id parameter is required' });
@@ -160,7 +165,8 @@ app.get('/product', async (req, res) => {
 
         const product = await prisma.products.findUnique({
             where: {
-                product_id: parseInt(id, 10)
+                product_id: parseInt(id, 10),
+                language_id: language_id
             },
             include: {
                 product_store: {
@@ -175,34 +181,35 @@ app.get('/product', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        // Calculate min and max prices
+        // Calculate min and max prices from product_store table
         const prices = product.product_store.map(ps => ps.price);
         const min_price = Math.min(...prices);
         const max_price = Math.max(...prices);
 
         // Prepare response data
-        const response_data = {
+        const responseData = {
             product_id: product.product_id,
             product_name: product.product_name,
             description: product.description,
-            price: product.price,
+            min_price, // Include min_price below description
+            max_price, // Include max_price below description
             stock: product.stock,
             category_id: product.category_id,
             image_path: product.image_path,
             created_at: product.created_at,
             category_name: product.category_name,
+            language_id: product.language_id, // Include language_id in the response
             stores: product.product_store.map(ps => ({
                 store_id: ps.store_id,
                 price: ps.price,
                 stock: ps.stock,
                 store_name: ps.stores.store_name,
-                store_location: ps.stores.store_location
-            })),
-            min_price,
-            max_price
+                store_location: ps.stores.store_location,
+                store_image: ps.stores.store_image // Include store_image in the response
+            }))
         };
 
-        res.json(response_data);
+        res.json(responseData);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -212,7 +219,7 @@ app.get('/product', async (req, res) => {
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
-        const { query, category_id } = req.query; // Get query and category_id parameters
+        const { query, category_id, language_id = 'en-US' } = req.query; // Get query, category_id, and language_id parameters or default to 'en-US'
 
         if (!query && !category_id) {
             return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
@@ -239,13 +246,18 @@ app.get('/search', async (req, res) => {
 
         const products = await prisma.products.findMany({
             where: {
-                OR: search_conditions
+                OR: search_conditions,
+                language_id: language_id
             },
             select: {
                 product_id: true,
                 product_name: true,
                 image_path: true,
-                price: true,
+                product_store: {
+                    select: {
+                        price: true
+                    }
+                }
             },
             orderBy: {
                 created_at: 'desc' // Sorting by creation date
@@ -258,12 +270,22 @@ app.get('/search', async (req, res) => {
             resize_image_async(product.image_path, image_name);
         });
 
-        res.json(products.map(product => ({
-            product_id: product.product_id,
-            product_name: product.product_name,
-            image_path: product.image_path,
-            price: product.price
-        })));
+        // Calculate min and max prices for each product from product_store table
+        const productsWithPrices = products.map(product => {
+            const prices = product.product_store.map(ps => ps.price);
+            const min_price = Math.min(...prices);
+            const max_price = Math.max(...prices);
+
+            return {
+                product_id: product.product_id,
+                product_name: product.product_name,
+                image_path: product.image_path,
+                min_price,
+                max_price
+            };
+        });
+
+        res.json(productsWithPrices);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
@@ -281,12 +303,12 @@ app.post('/cart', async (req, res) => {
 
         // Check if the user exists, create if not
         let user = await prisma.users.findUnique({
-            where: { userId: user_id }
+            where: { user_id: user_id }
         });
 
         if (!user) {
             user = await prisma.users.create({
-                data: { userId: user_id }
+                data: { user_id: user_id }
             });
         }
 
@@ -301,7 +323,7 @@ app.post('/cart', async (req, res) => {
 
         // Fetch or create the cart for the user
         let cart = await prisma.cart.findFirst({
-            where: { userId: user_id },
+            where: { user_id: user_id },
             include: {
                 cartItems: {
                     include: {
@@ -314,7 +336,7 @@ app.post('/cart', async (req, res) => {
         if (!cart) {
             cart = await prisma.cart.create({
                 data: {
-                    userId: user_id,
+                    user_id: user_id,
                     cartItems: {
                         create: []
                     }
@@ -333,25 +355,25 @@ app.post('/cart', async (req, res) => {
             // Remove the product from the cart
             await prisma.cartItems.deleteMany({
                 where: {
-                    cartId: cart.id,
-                    productId: product_id
+                    cart_id: cart.id,
+                    product_id: product_id
                 }
             });
         } else {
             // Add or update the product in the user's cart
             await prisma.cartItems.upsert({
                 where: {
-                    cartId_productId: {
-                        cartId: cart.id,
-                        productId: product_id
+                    cart_id_product_id: {
+                        cart_id: cart.id,
+                        product_id: product_id
                     }
                 },
                 update: {
                     quantity: quantity // Set the quantity directly
                 },
                 create: {
-                    cartId: cart.id,
-                    productId: product_id,
+                    cart_id: cart.id,
+                    product_id: product_id,
                     quantity: quantity
                 }
             });
@@ -359,7 +381,7 @@ app.post('/cart', async (req, res) => {
 
         // Retrieve the updated cart with cart items
         cart = await prisma.cart.findFirst({
-            where: { userId: user_id },
+            where: { user_id: user_id },
             include: {
                 cartItems: {
                     include: {
@@ -415,7 +437,7 @@ app.get('/shopping-results', async (req, res) => {
         const cart = await prisma.cart.findFirst({
             where: {
                 id: parsed_cart_id,
-                userId: user_id // Ensure user_id is treated as a string
+                user_id: user_id // Ensure user_id is treated as a string
             },
             include: {
                 cartItems: {
@@ -447,6 +469,7 @@ app.get('/shopping-results', async (req, res) => {
                         store_id: productStore.stores.store_id,
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
+                        store_image: productStore.stores.store_image, // Include store_image in the response
                         products: [],
                         total: 0
                     };
@@ -466,7 +489,7 @@ app.get('/shopping-results', async (req, res) => {
         const filtered_stores = Object.values(store_products).filter(store => {
             const store_product_ids = store.products.map(product => product.product_id);
             const cart_product_ids = cart.cartItems.map(cartItem => cartItem.product_id);
-            return cart_product_ids.every(productId => store_product_ids.includes(productId));
+            return cart_product_ids.every(product_id => store_product_ids.includes(product_id));
         });
 
         // Filter out stores with zero products
