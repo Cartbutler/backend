@@ -500,33 +500,38 @@ app.get('/cart', async (req, res) => {
         const responseData = {
             id: cart.id,
             user_id: cart.user_id,
-            min_price, // Include min_price
-            max_price, // Include max_price
-            cart_items: cart.cart_items.map(cartItem => ({
-                id: cartItem.id,
-                cart_id: cartItem.cart_id,
-                product_id: cartItem.product_id,
-                products: {
-                    product_id: cartItem.products.product_id,
-                    product_name: cartItem.products.product_name,
-                    description: cartItem.products.description,
-                    price: cartItem.products.price,
-                    stock: cartItem.products.stock,
-                    category_id: cartItem.products.category_id,
-                    image_path: cartItem.products.image_path,
-                    created_at: cartItem.products.created_at,
-                    category_name: cartItem.products.category_name,
-                    language_id: cartItem.products.language_id,
-                    product_store: cartItem.products.product_store.map(ps => ({
-                        store_id: ps.store_id,
-                        price: ps.price,
-                        stock: ps.stock,
-                        store_name: ps.stores?.store_name,
-                        store_location: ps.stores?.store_location,
-                        store_image: ps.stores?.store_image
-                    }))
-                }
-            }))
+            cart_items: cart.cart_items.map(cartItem => {
+                const productPrices = cartItem.products.product_store.map(ps => ps.price);
+                const productMinPrice = Math.min(...productPrices);
+                const productMaxPrice = Math.max(...productPrices);
+
+                return {
+                    id: cartItem.id,
+                    cart_id: cartItem.cart_id,
+                    product_id: cartItem.product_id,
+                    products: {
+                        product_id: cartItem.products.product_id,
+                        product_name: cartItem.products.product_name,
+                        description: cartItem.products.description,
+                        min_price: productMinPrice, // Include product min_price
+                        max_price: productMaxPrice, // Include product max_price
+                        stock: cartItem.products.stock,
+                        category_id: cartItem.products.category_id,
+                        image_path: cartItem.products.image_path,
+                        created_at: cartItem.products.created_at,
+                        category_name: cartItem.products.category_name,
+                        language_id: cartItem.products.language_id,
+                        product_store: cartItem.products.product_store.map(ps => ({
+                            store_id: ps.store_id,
+                            price: ps.price,
+                            stock: ps.stock,
+                            store_name: ps.stores?.store_name,
+                            store_location: ps.stores?.store_location,
+                            store_image: ps.stores?.store_image
+                        }))
+                    }
+                };
+            })
         };
 
         console.log(`User ${user_id} retrieved their cart items`);
