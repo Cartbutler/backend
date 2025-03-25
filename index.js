@@ -86,7 +86,7 @@ app.get('/', (req, res) => {
 // Categories endpoint.
 app.get('/categories', async (req, res) => {
     try {
-        const { language_id = 'eng' } = req.query; // Get language_id parameter or default to 'eng'
+        const { language_id = 'en-US' } = req.query; // Get language_id parameter or default to 'eng'
 
         const categories = await prisma.categories.findMany({
             where: {
@@ -159,7 +159,7 @@ app.get('/suggestions', async (req, res) => {
 // Single product endpoint to get product details by ID or query
 app.get('/product', async (req, res) => {
     try {
-        const { id, language_id = 'eng' } = req.query; // Get id and language_id parameters or default to 'eng'
+        const { id, language_id = 'en-US' } = req.query; // Get id and language_id parameters or default to 'en-US'
 
         if (!id) {
             return res.status(400).json({ error: 'id parameter is required' });
@@ -221,7 +221,7 @@ app.get('/product', async (req, res) => {
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
-        const { query, category_id, language_id = 'eng' } = req.query; // Get query, category_id, and language_id parameters or default to 'eng'
+        const { query, category_id, language_id = 'eng-US' } = req.query; // Get query, category_id, and language_id parameters or default to 'en-US'
 
         if (!query && !category_id) {
             return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
