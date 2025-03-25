@@ -49,7 +49,7 @@ async function resize_image_async(image_url, image_name) {
 
 async function fetch_or_create_cart(user_id) {
     let cart = await prisma.cart.findFirst({
-        where: { userId: user_id },
+        where: { user_id: user_id },
         include: {
             cartItems: {
                 include: {
@@ -62,7 +62,7 @@ async function fetch_or_create_cart(user_id) {
     if (!cart) {
         cart = await prisma.cart.create({
             data: {
-                userId: user_id,
+                user_id: user_id,
                 cartItems: []
             },
             include: {
@@ -86,7 +86,7 @@ app.get('/', (req, res) => {
 // Categories endpoint.
 app.get('/categories', async (req, res) => {
     try {
-        const { language_id = 'en-US' } = req.query; // Get language_id parameter or default to 'eng'
+        const { language_id = 'en-US' } = req.query; // Get language_id parameter or default to 'en-US'
 
         const categories = await prisma.categories.findMany({
             where: {
@@ -95,8 +95,7 @@ app.get('/categories', async (req, res) => {
             select: {
                 category_id: true,
                 category_name: true,
-                image_path: true, // Include image_path in the response
-                language_id: true // Include language_id in the response
+                image_path: true // Include image_path in the response
             }
         });
 
@@ -109,8 +108,7 @@ app.get('/categories', async (req, res) => {
         res.json(categories.map(category => ({
             category_id: category.category_id,
             category_name: category.category_name,
-            image_path: category.image_path,
-            language_id: category.language_id // Include language_id in the response
+            image_path: category.image_path
         })));
     } catch (err) {
         console.error('Database query error:', err.message);
@@ -221,7 +219,7 @@ app.get('/product', async (req, res) => {
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
-        const { query, category_id, language_id = 'eng-US' } = req.query; // Get query, category_id, and language_id parameters or default to 'en-US'
+        const { query, category_id, language_id = 'en-US' } = req.query; // Get query, category_id, and language_id parameters or default to 'en-US'
 
         if (!query && !category_id) {
             return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
@@ -255,7 +253,11 @@ app.get('/search', async (req, res) => {
                 product_id: true,
                 product_name: true,
                 image_path: true,
-                language_id: true // Include language_id in the response
+                product_store: {
+                    select: {
+                        price: true
+                    }
+                }
             },
             orderBy: {
                 created_at: 'desc' // Sorting by creation date
@@ -269,31 +271,21 @@ app.get('/search', async (req, res) => {
         });
 
         // Calculate min and max prices for each product from product_store table
-        const productsWithPrices = await Promise.all(products.map(async product => {
-            const productStores = await prisma.product_store.findMany({
-                where: { product_id: product.product_id },
-                select: { price: true }
-            });
-
-            const prices = productStores.map(ps => ps.price);
+        const productsWithPrices = products.map(product => {
+            const prices = product.product_store.map(ps => ps.price);
             const min_price = Math.min(...prices);
             const max_price = Math.max(...prices);
 
             return {
-                ...product,
+                product_id: product.product_id,
+                product_name: product.product_name,
+                image_path: product.image_path,
                 min_price,
                 max_price
             };
-        }));
+        });
 
-        res.json(productsWithPrices.map(product => ({
-            product_id: product.product_id,
-            product_name: product.product_name,
-            image_path: product.image_path,
-            language_id: product.language_id, // Include language_id in the response
-            min_price: product.min_price,
-            max_price: product.max_price
-        })));
+        res.json(productsWithPrices);
     } catch (err) {
         console.error('Database query error:', err.message);
         res.status(500).json({ error: 'Database query error', details: err.message });
