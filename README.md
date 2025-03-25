@@ -28,14 +28,7 @@ https://southern-shard-449119-d4.nn.r.appspot.com/
    npm install
    ```
 
-3. Set up the environment variables:
-   - Create a `.env` file in the root directory and add the following:
-     ```sh
-     DATABASE_URL=mysql://cartbutler8946:conestoga8946@104.197.180.231:3306/cartbutler8946
-     GCLOUD_STORAGE_BUCKET=your-bucket-name
-     ```
-
-4. Run the Prisma migrations:
+3. Run the Prisma migrations:
    ```sh
    npx prisma migrate dev
    ```
