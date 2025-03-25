@@ -9,12 +9,11 @@ datasource db {
 
 model cart {
   id        Int         @id @default(autoincrement())
-  userId    String      @db.VarChar(36)
+  user_id   String      @db.VarChar(36)
   quantity  Int         @default(0)
-  users     users       @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_userId")
   cartItems cartItems[]
 
-  @@index([userId], map: "userId")
+  @@index([user_id], map: "user_id")
 }
 
 model cartItems {
@@ -123,8 +122,7 @@ model stores {
 }
 
 model users {
-  userId String @id @db.VarChar(36)
-  cart   cart[]
+  user_id String @id @db.VarChar(36)
 }
 
 model category_translate {
