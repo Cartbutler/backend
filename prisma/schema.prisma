@@ -8,24 +8,12 @@ datasource db {
 }
 
 model cart {
-  id        Int         @id @default(autoincrement())
-  user_id   String      @db.VarChar(36)
-  quantity  Int         @default(0)
-  cartItems cartItems[]
+  id         Int          @id @default(autoincrement())
+  user_id    String       @db.VarChar(36)
+  quantity   Int          @default(0)
+  cart_items cart_items[]
 
   @@index([user_id], map: "user_id")
-}
-
-model cartItems {
-  id        Int      @id @default(autoincrement())
-  cartId    Int
-  productId Int
-  quantity  Int
-  cart      cart     @relation(fields: [cartId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "cartItems_ibfk_1")
-  products  products @relation(fields: [productId], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cartItems_product_store")
-
-  @@unique([cartId, productId], map: "cartId_productId")
-  @@index([productId], map: "productId")
 }
 
 model categories {
@@ -105,7 +93,7 @@ model products {
   created_at    DateTime        @default(now()) @db.DateTime(0)
   category_name String          @db.VarChar(255)
   language_id   String?         @db.VarChar(255)
-  cartItems     cartItems[]
+  cart_items    cart_items[]
   product_store product_store[]
   categories    categories      @relation(fields: [category_id], references: [category_id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -146,4 +134,16 @@ model products_translate {
   created_at    DateTime @default(now()) @db.DateTime(0)
   category_name String   @db.VarChar(255)
   language      String?  @db.VarChar(10)
+}
+
+model cart_items {
+  id         Int      @id @default(autoincrement())
+  cart_id    Int
+  product_id Int
+  quantity   Int
+  cart       cart     @relation(fields: [cart_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "cart_items_ibfk_1")
+  products   products @relation(fields: [product_id], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cartItems_product_store")
+
+  @@unique([cart_id, product_id], map: "cartId_productId")
+  @@index([product_id], map: "productId")
 }

@@ -51,9 +51,17 @@ async function fetch_or_create_cart(user_id) {
     let cart = await prisma.cart.findFirst({
         where: { user_id: user_id },
         include: {
-            cartItems: {
+            cart_items: {
                 include: {
-                    products: true
+                    products: {
+                        include: {
+                            product_store: {
+                                include: {
+                                    stores: true
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -63,12 +71,22 @@ async function fetch_or_create_cart(user_id) {
         cart = await prisma.cart.create({
             data: {
                 user_id: user_id,
-                cartItems: []
+                cart_items: {
+                    create: []
+                }
             },
             include: {
-                cartItems: {
+                cart_items: {
                     include: {
-                        products: true
+                        products: {
+                            include: {
+                                product_store: {
+                                    include: {
+                                        stores: true
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -190,9 +208,9 @@ app.get('/product', async (req, res) => {
         const responseData = {
             product_id: product.product_id,
             product_name: product.product_name,
+            min_price, // Include min_price below product_name
+            max_price, // Include max_price below product_name
             description: product.description,
-            min_price, // Include min_price below description
-            max_price, // Include max_price below description
             stock: product.stock,
             category_id: product.category_id,
             image_path: product.image_path,
@@ -292,7 +310,6 @@ app.get('/search', async (req, res) => {
     }
 });
 
-// Add to shopping cart endpoint (POST)
 app.post('/cart', async (req, res) => {
     try {
         const { user_id, product_id, quantity } = req.body;
@@ -325,9 +342,17 @@ app.post('/cart', async (req, res) => {
         let cart = await prisma.cart.findFirst({
             where: { user_id: user_id },
             include: {
-                cartItems: {
+                cart_items: {
                     include: {
-                        products: true
+                        products: {
+                            include: {
+                                product_store: {
+                                    include: {
+                                        stores: true
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -337,14 +362,22 @@ app.post('/cart', async (req, res) => {
             cart = await prisma.cart.create({
                 data: {
                     user_id: user_id,
-                    cartItems: {
+                    cart_items: {
                         create: []
                     }
                 },
                 include: {
-                    cartItems: {
+                    cart_items: {
                         include: {
-                            products: true
+                            products: {
+                                include: {
+                                    product_store: {
+                                        include: {
+                                            stores: true
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -353,7 +386,7 @@ app.post('/cart', async (req, res) => {
 
         if (quantity === 0) {
             // Remove the product from the cart
-            await prisma.cartItems.deleteMany({
+            await prisma.cart_items.deleteMany({
                 where: {
                     cart_id: cart.id,
                     product_id: product_id
@@ -361,7 +394,7 @@ app.post('/cart', async (req, res) => {
             });
         } else {
             // Add or update the product in the user's cart
-            await prisma.cartItems.upsert({
+            await prisma.cart_items.upsert({
                 where: {
                     cart_id_product_id: {
                         cart_id: cart.id,
@@ -383,16 +416,63 @@ app.post('/cart', async (req, res) => {
         cart = await prisma.cart.findFirst({
             where: { user_id: user_id },
             include: {
-                cartItems: {
+                cart_items: {
                     include: {
-                        products: true
+                        products: {
+                            include: {
+                                product_store: {
+                                    include: {
+                                        stores: true
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         });
 
+        // Calculate min and max prices from cart items
+        const prices = cart.cart_items.flatMap(cartItem => cartItem.products.product_store.map(ps => ps.price));
+        const min_price = Math.min(...prices);
+        const max_price = Math.max(...prices);
+
+        // Prepare response data
+        const responseData = {
+            id: cart.id,
+            user_id: cart.user_id,
+            min_price, // Include min_price
+            max_price, // Include max_price
+            cart_items: cart.cart_items.map(cartItem => ({
+                id: cartItem.id,
+                cart_id: cartItem.cart_id,
+                product_id: cartItem.product_id,
+                quantity: cartItem.quantity,
+                products: {
+                    product_id: cartItem.products.product_id,
+                    product_name: cartItem.products.product_name,
+                    description: cartItem.products.description,
+                    price: cartItem.products.price,
+                    stock: cartItem.products.stock,
+                    category_id: cartItem.products.category_id,
+                    image_path: cartItem.products.image_path,
+                    created_at: cartItem.products.created_at,
+                    category_name: cartItem.products.category_name,
+                    language_id: cartItem.products.language_id,
+                    product_store: cartItem.products.product_store.map(ps => ({
+                        store_id: ps.store_id,
+                        price: ps.price,
+                        stock: ps.stock,
+                        store_name: ps.stores?.store_name,
+                        store_location: ps.stores?.store_location,
+                        store_image: ps.stores?.store_image
+                    }))
+                }
+            }))
+        };
+
         console.log(`User ${user_id} updated their cart with product ${product_id} and quantity ${quantity}`);
-        res.json(cart);
+        res.json(responseData);
     } catch (err) {
         console.error('Error updating cart:', err.message);
         res.status(500).json({ error: 'Error updating cart', details: err.message });
@@ -411,8 +491,46 @@ app.get('/cart', async (req, res) => {
         // Fetch or create the user's cart with cart items
         const cart = await fetch_or_create_cart(user_id);
 
+        // Calculate min and max prices from cart items
+        const prices = cart.cart_items.flatMap(cartItem => cartItem.products.product_store.map(ps => ps.price));
+        const min_price = Math.min(...prices);
+        const max_price = Math.max(...prices);
+
+        // Prepare response data
+        const responseData = {
+            id: cart.id,
+            user_id: cart.user_id,
+            min_price, // Include min_price
+            max_price, // Include max_price
+            cart_items: cart.cart_items.map(cartItem => ({
+                id: cartItem.id,
+                cart_id: cartItem.cart_id,
+                product_id: cartItem.product_id,
+                products: {
+                    product_id: cartItem.products.product_id,
+                    product_name: cartItem.products.product_name,
+                    description: cartItem.products.description,
+                    price: cartItem.products.price,
+                    stock: cartItem.products.stock,
+                    category_id: cartItem.products.category_id,
+                    image_path: cartItem.products.image_path,
+                    created_at: cartItem.products.created_at,
+                    category_name: cartItem.products.category_name,
+                    language_id: cartItem.products.language_id,
+                    product_store: cartItem.products.product_store.map(ps => ({
+                        store_id: ps.store_id,
+                        price: ps.price,
+                        stock: ps.stock,
+                        store_name: ps.stores?.store_name,
+                        store_location: ps.stores?.store_location,
+                        store_image: ps.stores?.store_image
+                    }))
+                }
+            }))
+        };
+
         console.log(`User ${user_id} retrieved their cart items`);
-        res.json(cart);
+        res.json(responseData);
     } catch (err) {
         console.error('Error retrieving cart items:', err.message);
         res.status(500).json({ error: 'Error retrieving cart items', details: err.message });
@@ -420,88 +538,60 @@ app.get('/cart', async (req, res) => {
 });
 
 // Shopping results endpoint (GET)
-app.get('/shopping-results', async (req, res) => {
-    try { 
-        const { cart_id, user_id } = req.query; // Get cart_id and user_id from query parameters
+app.get('/cart', async (req, res) => {
+    try {
+        const { user_id } = req.query;
 
-        if (!cart_id || !user_id) {
-            return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
+        if (!user_id) {
+            return res.status(400).json({ error: 'user_id is required' });
         }
 
-        const parsed_cart_id = parseInt(cart_id, 10);
-        if (isNaN(parsed_cart_id)) {
-            return res.status(400).json({ error: 'Invalid cart_id parameter' });
-        }
+        // Fetch or create the user's cart with cart items
+        const cart = await fetch_or_create_cart(user_id);
 
-        // Fetch the cart with cart items for the user
-        const cart = await prisma.cart.findFirst({
-            where: {
-                id: parsed_cart_id,
-                user_id: user_id // Ensure user_id is treated as a string
-            },
-            include: {
-                cartItems: {
-                    include: {
-                        products: {
-                            include: {
-                                product_store: {
-                                    include: {
-                                        stores: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
+        // Calculate min and max prices from cart items
+        const prices = cart.cart_items.flatMap(cartItem => cartItem.products.product_store.map(ps => ps.price));
+        const min_price = Math.min(...prices);
+        const max_price = Math.max(...prices);
 
-        if (!cart) {
-            return res.status(404).json({ error: 'Cart not found or does not belong to the user' });
-        }
-
-        // Group products by store
-        const store_products = cart.cartItems.reduce((acc, cartItem) => {
-            cartItem.products.product_store.forEach(productStore => {
-                const store_id = productStore.store_id;
-                if (!acc[store_id]) {
-                    acc[store_id] = {
-                        store_id: productStore.stores.store_id,
-                        store_name: productStore.stores.store_name,
-                        store_location: productStore.stores.store_location,
-                        store_image: productStore.stores.store_image, // Include store_image in the response
-                        products: [],
-                        total: 0
-                    };
-                }
-                acc[store_id].products.push({
-                    product_id: cartItem.product_id,
+        // Prepare response data
+        const responseData = {
+            id: cart.id,
+            user_id: cart.user_id,
+            min_price, // Include min_price
+            max_price, // Include max_price
+            cart_items: cart.cart_items.map(cartItem => ({
+                id: cartItem.id,
+                cart_id: cartItem.cart_id,
+                product_id: cartItem.product_id,
+                products: {
+                    product_id: cartItem.products.product_id,
                     product_name: cartItem.products.product_name,
-                    price: productStore.price,
-                    quantity: cartItem.quantity
-                });
-                acc[store_id].total += productStore.price * cartItem.quantity;
-            });
-            return acc;
-        }, {});
+                    description: cartItem.products.description,
+                    price: cartItem.products.price,
+                    stock: cartItem.products.stock,
+                    category_id: cartItem.products.category_id,
+                    image_path: cartItem.products.image_path,
+                    created_at: cartItem.products.created_at,
+                    category_name: cartItem.products.category_name,
+                    language_id: cartItem.products.language_id,
+                    product_store: cartItem.products.product_store.map(ps => ({
+                        store_id: ps.store_id,
+                        price: ps.price,
+                        stock: ps.stock,
+                        store_name: ps.stores?.store_name,
+                        store_location: ps.stores?.store_location,
+                        store_image: ps.stores?.store_image
+                    }))
+                }
+            }))
+        };
 
-        // Filter out stores that do not have all the products from the shopping list
-        const filtered_stores = Object.values(store_products).filter(store => {
-            const store_product_ids = store.products.map(product => product.product_id);
-            const cart_product_ids = cart.cartItems.map(cartItem => cartItem.product_id);
-            return cart_product_ids.every(product_id => store_product_ids.includes(product_id));
-        });
-
-        // Filter out stores with zero products
-        const non_empty_stores = filtered_stores.filter(store => store.products.length > 0);
-
-        // Sort the filtered stores by total price
-        const sorted_stores = non_empty_stores.sort((a, b) => a.total - b.total);
-
-        res.json(sorted_stores);
+        console.log(`User ${user_id} retrieved their cart items`);
+        res.json(responseData);
     } catch (err) {
-        console.error('Error fetching shopping results:', err.message);
-        res.status(500).json({ error: 'Error fetching shopping results', details: err.message });
+        console.error('Error retrieving cart items:', err.message);
+        res.status(500).json({ error: 'Error retrieving cart items', details: err.message });
     }
 });
 
