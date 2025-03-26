@@ -310,6 +310,7 @@ app.get('/search', async (req, res) => {
     }
 });
 
+// Cart endpoint (POST)
 app.post('/cart', async (req, res) => {
     try {
         const { user_id, product_id, quantity } = req.body;
@@ -537,13 +538,13 @@ app.get('/cart', async (req, res) => {
     }
 });
 
-// Shopping results endpoint (GET)
+// Shopping result endpoint (GET)
 app.get('/shopping-results', async (req, res) => {
     try {
-        const { cart_id, user_id } = req.query; // Get cart_id and user_id from query parameters
+        const { cart_id, user_id, radius = 100, store_id, user_location } = req.query; // Get cart_id, user_id, radius (default to 100km), store_id, and user_location from query parameters
 
-        if (!cart_id || !user_id) {
-            return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
+        if (!cart_id || !user_id || !user_location) {
+            return res.status(400).json({ error: 'cart_id, user_id, and user_location parameters are required' });
         }
 
         const parsed_cart_id = parseInt(cart_id, 10);
@@ -588,6 +589,8 @@ app.get('/shopping-results', async (req, res) => {
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
                         store_image: productStore.stores.store_image, // Include store_image in the response
+                        latitude: productStore.stores.latitude,
+                        longitude: productStore.stores.longitude,
                         products: [],
                         total: 0
                     };
@@ -603,6 +606,8 @@ app.get('/shopping-results', async (req, res) => {
             return acc;
         }, {});
 
+        console.log('Store products:', store_products);
+
         // Filter out stores that do not have all the products from the shopping list
         const filtered_stores = Object.values(store_products).filter(store => {
             const store_product_ids = store.products.map(product => product.product_id);
@@ -610,11 +615,32 @@ app.get('/shopping-results', async (req, res) => {
             return cart_product_ids.every(product_id => store_product_ids.includes(product_id));
         });
 
+        console.log('Filtered stores by products:', filtered_stores);
+
+        // Filter by store_id if provided
+        const stores_filtered_by_id = store_id ? filtered_stores.filter(store => store.store_id === parseInt(store_id, 10)) : filtered_stores;
+
+        console.log('Filtered stores by store_id:', stores_filtered_by_id);
+
+        // Filter by radius if provided
+        const stores_filtered_by_radius = stores_filtered_by_id.filter(store => {
+            const [user_lat, user_lon] = user_location.split(',').map(Number);
+            const distance = calculateDistance(user_lat, user_lon, store.latitude, store.longitude);
+            console.log(`Distance to store ${store.store_id}:`, distance); // Log distance to each store
+            return distance <= parseFloat(radius);
+        });
+
+        console.log('Filtered stores by radius:', stores_filtered_by_radius);
+
         // Filter out stores with zero products
-        const non_empty_stores = filtered_stores.filter(store => store.products.length > 0);
+        const non_empty_stores = stores_filtered_by_radius.filter(store => store.products.length > 0);
+
+        console.log('Non-empty stores:', non_empty_stores);
 
         // Sort the filtered stores by total price
         const sorted_stores = non_empty_stores.sort((a, b) => a.total - b.total);
+
+        console.log('Sorted stores:', sorted_stores);
 
         res.json(sorted_stores);
     } catch (err) {
@@ -622,6 +648,19 @@ app.get('/shopping-results', async (req, res) => {
         res.status(500).json({ error: 'Error fetching shopping results', details: err.message });
     }
 });
+
+// Function to calculate the distance between two coordinates using the Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c; // Distance in kilometers
+    return distance;
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
