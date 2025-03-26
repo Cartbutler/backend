@@ -547,7 +547,7 @@ app.get('/cart', async (req, res) => {
 // Shopping result endpoint (GET)
 app.get('/shopping-results', async (req, res) => {
     try {
-        const { cart_id, user_id, radius, store_id, user_location } = req.query; // Get cart_id, user_id, radius, store_id, and user_location from query parameters
+        const { cart_id, user_id, radius, store_ids, user_location } = req.query; // Get cart_id, user_id, radius, store_ids, and user_location from query parameters
 
         if (!cart_id || !user_id) {
             return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
@@ -562,6 +562,9 @@ app.get('/shopping-results', async (req, res) => {
             return res.status(400).json({ error: 'Invalid cart_id parameter' });
         }
 
+        // Parse store_ids into an array of integers
+        const storeIdsArray = store_ids ? store_ids.split(',').map(id => parseInt(id, 10)) : [];
+
         // Build the where clause for the Prisma query
         const whereClause = {
             id: parsed_cart_id,
@@ -571,18 +574,13 @@ app.get('/shopping-results', async (req, res) => {
                     products: {
                         product_store: {
                             some: {
-                                stores: {}
+                                stores: storeIdsArray.length > 0 ? { store_id: { in: storeIdsArray } } : {}
                             }
                         }
                     }
                 }
             }
         };
-
-        // Add store_id filter if provided
-        if (store_id) {
-            whereClause.cart_items.some.products.product_store.some.stores.store_id = parseInt(store_id, 10);
-        }
 
         // Fetch the cart with cart items for the user
         const cart = await prisma.cart.findFirst({
