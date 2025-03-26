@@ -208,22 +208,25 @@ app.get('/product', async (req, res) => {
         const responseData = {
             product_id: product.product_id,
             product_name: product.product_name,
-            min_price, // Include min_price below product_name
-            max_price, // Include max_price below product_name
+            min_price,
+            max_price,
             description: product.description,
             stock: product.stock,
             category_id: product.category_id,
             image_path: product.image_path,
             created_at: product.created_at,
             category_name: product.category_name,
-            language_id: product.language_id, // Include language_id in the response
+            language_id: product.language_id,
             stores: product.product_store.map(ps => ({
                 store_id: ps.store_id,
                 price: ps.price,
                 stock: ps.stock,
                 store_name: ps.stores.store_name,
                 store_location: ps.stores.store_location,
-                store_image: ps.stores.store_image // Include store_image in the response
+                store_address: ps.stores.store_address,
+                latitude: ps.stores.latitude,
+                longitude: ps.stores.longitude,
+                store_image: ps.stores.store_image
             }))
         };
 
@@ -524,6 +527,9 @@ app.get('/cart', async (req, res) => {
                         stock: ps.stock,
                         store_name: ps.stores?.store_name,
                         store_location: ps.stores?.store_location,
+                        store_address: ps.stores?.store_address,
+                        latitude: ps.stores?.latitude,
+                        longitude: ps.stores?.longitude,
                         store_image: ps.stores?.store_image
                     }))
                 }
@@ -611,9 +617,10 @@ app.get('/shopping-results', async (req, res) => {
                         store_id: productStore.stores.store_id,
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
-                        store_image: productStore.stores.store_image, // Include store_image in the response
+                        store_address: productStore.stores.store_address,
                         latitude: productStore.stores.latitude,
                         longitude: productStore.stores.longitude,
+                        store_image: productStore.stores.store_image,
                         products: [],
                         total: 0
                     };
