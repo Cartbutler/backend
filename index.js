@@ -541,10 +541,14 @@ app.get('/cart', async (req, res) => {
 // Shopping result endpoint (GET)
 app.get('/shopping-results', async (req, res) => {
     try {
-        const { cart_id, user_id, radius = 100, store_id, user_location } = req.query; // Get cart_id, user_id, radius (default to 100km), store_id, and user_location from query parameters
+        const { cart_id, user_id, radius, store_id, user_location } = req.query; // Get cart_id, user_id, radius, store_id, and user_location from query parameters
 
-        if (!cart_id || !user_id || !user_location) {
-            return res.status(400).json({ error: 'cart_id, user_id, and user_location parameters are required' });
+        if (!cart_id || !user_id) {
+            return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
+        }
+
+        if (radius && !user_location) {
+            return res.status(400).json({ error: 'user_location parameter is required when radius is provided' });
         }
 
         const parsed_cart_id = parseInt(cart_id, 10);
@@ -552,12 +556,31 @@ app.get('/shopping-results', async (req, res) => {
             return res.status(400).json({ error: 'Invalid cart_id parameter' });
         }
 
+        // Build the where clause for the Prisma query
+        const whereClause = {
+            id: parsed_cart_id,
+            user_id: user_id, // Ensure user_id is treated as a string
+            cart_items: {
+                some: {
+                    products: {
+                        product_store: {
+                            some: {
+                                stores: {}
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        // Add store_id filter if provided
+        if (store_id) {
+            whereClause.cart_items.some.products.product_store.some.stores.store_id = parseInt(store_id, 10);
+        }
+
         // Fetch the cart with cart items for the user
         const cart = await prisma.cart.findFirst({
-            where: {
-                id: parsed_cart_id,
-                user_id: user_id // Ensure user_id is treated as a string
-            },
+            where: whereClause,
             include: {
                 cart_items: {
                     include: {
@@ -608,27 +631,13 @@ app.get('/shopping-results', async (req, res) => {
 
         console.log('Store products:', store_products);
 
-        // Filter out stores that do not have all the products from the shopping list
-        const filtered_stores = Object.values(store_products).filter(store => {
-            const store_product_ids = store.products.map(product => product.product_id);
-            const cart_product_ids = cart.cart_items.map(cartItem => cartItem.product_id);
-            return cart_product_ids.every(product_id => store_product_ids.includes(product_id));
-        });
-
-        console.log('Filtered stores by products:', filtered_stores);
-
-        // Filter by store_id if provided
-        const stores_filtered_by_id = store_id ? filtered_stores.filter(store => store.store_id === parseInt(store_id, 10)) : filtered_stores;
-
-        console.log('Filtered stores by store_id:', stores_filtered_by_id);
-
         // Filter by radius if provided
-        const stores_filtered_by_radius = stores_filtered_by_id.filter(store => {
+        const stores_filtered_by_radius = radius ? Object.values(store_products).filter(store => {
             const [user_lat, user_lon] = user_location.split(',').map(Number);
             const distance = calculateDistance(user_lat, user_lon, store.latitude, store.longitude);
             console.log(`Distance to store ${store.store_id}:`, distance); // Log distance to each store
             return distance <= parseFloat(radius);
-        });
+        }) : Object.values(store_products);
 
         console.log('Filtered stores by radius:', stores_filtered_by_radius);
 
