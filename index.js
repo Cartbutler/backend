@@ -208,22 +208,25 @@ app.get('/product', async (req, res) => {
         const responseData = {
             product_id: product.product_id,
             product_name: product.product_name,
-            min_price, // Include min_price below product_name
-            max_price, // Include max_price below product_name
+            min_price,
+            max_price,
             description: product.description,
             stock: product.stock,
             category_id: product.category_id,
             image_path: product.image_path,
             created_at: product.created_at,
             category_name: product.category_name,
-            language_id: product.language_id, // Include language_id in the response
+            language_id: product.language_id,
             stores: product.product_store.map(ps => ({
                 store_id: ps.store_id,
                 price: ps.price,
                 stock: ps.stock,
                 store_name: ps.stores.store_name,
                 store_location: ps.stores.store_location,
-                store_image: ps.stores.store_image // Include store_image in the response
+                store_address: ps.stores.store_address,
+                latitude: ps.stores.latitude,
+                longitude: ps.stores.longitude,
+                store_image: ps.stores.store_image
             }))
         };
 
@@ -310,6 +313,7 @@ app.get('/search', async (req, res) => {
     }
 });
 
+// Cart endpoint (POST)
 app.post('/cart', async (req, res) => {
     try {
         const { user_id, product_id, quantity } = req.body;
@@ -523,6 +527,9 @@ app.get('/cart', async (req, res) => {
                         stock: ps.stock,
                         store_name: ps.stores?.store_name,
                         store_location: ps.stores?.store_location,
+                        store_address: ps.stores?.store_address,
+                        latitude: ps.stores?.latitude,
+                        longitude: ps.stores?.longitude,
                         store_image: ps.stores?.store_image
                     }))
                 }
@@ -537,13 +544,17 @@ app.get('/cart', async (req, res) => {
     }
 });
 
-// Shopping results endpoint (GET)
+// Shopping result endpoint (GET)
 app.get('/shopping-results', async (req, res) => {
     try {
-        const { cart_id, user_id } = req.query; // Get cart_id and user_id from query parameters
+        const { cart_id, user_id, radius, store_ids, user_location } = req.query; // Get cart_id, user_id, radius, store_ids, and user_location from query parameters
 
         if (!cart_id || !user_id) {
             return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
+        }
+
+        if (radius && !user_location) {
+            return res.status(400).json({ error: 'user_location parameter is required when radius is provided' });
         }
 
         const parsed_cart_id = parseInt(cart_id, 10);
@@ -551,12 +562,29 @@ app.get('/shopping-results', async (req, res) => {
             return res.status(400).json({ error: 'Invalid cart_id parameter' });
         }
 
+        // Parse store_ids into an array of integers
+        const storeIdsArray = store_ids ? store_ids.split(',').map(id => parseInt(id, 10)) : [];
+
+        // Build the where clause for the Prisma query
+        const whereClause = {
+            id: parsed_cart_id,
+            user_id: user_id, // Ensure user_id is treated as a string
+            cart_items: {
+                some: {
+                    products: {
+                        product_store: {
+                            some: {
+                                stores: storeIdsArray.length > 0 ? { store_id: { in: storeIdsArray } } : {}
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
         // Fetch the cart with cart items for the user
         const cart = await prisma.cart.findFirst({
-            where: {
-                id: parsed_cart_id,
-                user_id: user_id // Ensure user_id is treated as a string
-            },
+            where: whereClause,
             include: {
                 cart_items: {
                     include: {
@@ -587,7 +615,10 @@ app.get('/shopping-results', async (req, res) => {
                         store_id: productStore.stores.store_id,
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
-                        store_image: productStore.stores.store_image, // Include store_image in the response
+                        store_address: productStore.stores.store_address,
+                        latitude: productStore.stores.latitude,
+                        longitude: productStore.stores.longitude,
+                        store_image: productStore.stores.store_image,
                         products: [],
                         total: 0
                     };
@@ -603,18 +634,27 @@ app.get('/shopping-results', async (req, res) => {
             return acc;
         }, {});
 
-        // Filter out stores that do not have all the products from the shopping list
-        const filtered_stores = Object.values(store_products).filter(store => {
-            const store_product_ids = store.products.map(product => product.product_id);
-            const cart_product_ids = cart.cart_items.map(cartItem => cartItem.product_id);
-            return cart_product_ids.every(product_id => store_product_ids.includes(product_id));
-        });
+        console.log('Store products:', store_products);
+
+        // Filter by radius if provided
+        const stores_filtered_by_radius = radius ? Object.values(store_products).filter(store => {
+            const [user_lat, user_lon] = user_location.split(',').map(Number);
+            const distance = calculateDistance(user_lat, user_lon, store.latitude, store.longitude);
+            console.log(`Distance to store ${store.store_id}:`, distance); // Log distance to each store
+            return distance <= parseFloat(radius);
+        }) : Object.values(store_products);
+
+        console.log('Filtered stores by radius:', stores_filtered_by_radius);
 
         // Filter out stores with zero products
-        const non_empty_stores = filtered_stores.filter(store => store.products.length > 0);
+        const non_empty_stores = stores_filtered_by_radius.filter(store => store.products.length > 0);
+
+        console.log('Non-empty stores:', non_empty_stores);
 
         // Sort the filtered stores by total price
         const sorted_stores = non_empty_stores.sort((a, b) => a.total - b.total);
+
+        console.log('Sorted stores:', sorted_stores);
 
         res.json(sorted_stores);
     } catch (err) {
@@ -622,6 +662,19 @@ app.get('/shopping-results', async (req, res) => {
         res.status(500).json({ error: 'Error fetching shopping results', details: err.message });
     }
 });
+
+// Function to calculate the distance between two coordinates using the Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c; // Distance in kilometers
+    return distance;
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {

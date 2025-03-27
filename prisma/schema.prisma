@@ -106,6 +106,8 @@ model stores {
   store_location String          @db.VarChar(255)
   store_adress   String?         @db.VarChar(255)
   store_image    String?         @db.VarChar(255)
+  longitude      Decimal         @db.Decimal(9, 6)
+  latitude       Decimal         @db.Decimal(9, 6)
   product_store  product_store[]
 }
 
