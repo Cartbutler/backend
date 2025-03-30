@@ -25,38 +25,38 @@ model categories {
 }
 
 model customers {
-  customers_id Int      @id @default(autoincrement())
-  first_name   String   @db.VarChar(255)
-  last_name    String   @db.VarChar(255)
-  email        String   @unique @db.VarChar(255)
-  phone_number String   @db.VarChar(255)
-  address      String   @db.VarChar(255)
+  customers_id Int       @id
+  first_name   String?   @db.VarChar(255)
+  last_name    String?   @db.VarChar(255)
+  email        String?   @unique @db.VarChar(255)
+  phone_number String?   @db.VarChar(255)
+  address      String?   @db.VarChar(255)
   premium_rank Int?
-  date_joined  DateTime @default(now()) @db.DateTime(0)
+  date_joined  DateTime? @db.DateTime(0)
   orders       orders[]
 }
 
 model db_users {
-  user_id  Int    @id
-  username String @unique @db.VarChar(255)
-  password String @db.VarChar(255)
+  user_id  Int     @id
+  username String? @unique @db.VarChar(255)
+  password String? @db.VarChar(255)
 }
 
 model employees {
-  e_id   Int    @id
-  name   String @db.VarChar(255)
-  f_name String @db.VarChar(255)
-  l_name String @db.VarChar(255)
-  email  String @unique(map: "email") @db.VarChar(255)
-  phone  String @db.VarChar(255)
+  e_id         Int     @id
+  name         String? @db.VarChar(255)
+  first_name   String? @db.VarChar(255)
+  last_name    String? @db.VarChar(255)
+  email        String? @unique(map: "email") @db.VarChar(255)
+  phone_number String? @db.VarChar(255)
 }
 
 model orders {
   order_id       Int        @id
   customer_id    Int?
-  order_status   String     @db.VarChar(255)
-  order_day      DateTime   @db.DateTime(0)
-  payment_method String     @db.VarChar(255)
+  order_status   String?    @db.VarChar(255)
+  order_day      DateTime?  @db.DateTime(0)
+  payment_method String?    @db.VarChar(255)
   customers      customers? @relation(fields: [customer_id], references: [customers_id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([customer_id], map: "orders_customer_id_fkey")
