@@ -546,7 +546,8 @@ app.get('/cart', async (req, res) => {
     }
 });
 
-// Shopping result endpoint (GET)
+// Shopping results endpoint (GET)
+// This endpoint fetches the shopping results based on the user's cart and filters by store IDs and radius
 app.get('/shopping-results', async (req, res) => {
     try {
         const { cart_id, user_id, radius, store_ids, user_location } = req.query;
@@ -562,6 +563,15 @@ app.get('/shopping-results', async (req, res) => {
         const parsed_cart_id = parseInt(cart_id, 10);
         if (isNaN(parsed_cart_id)) {
             return res.status(400).json({ error: 'Invalid cart_id parameter' });
+        }
+
+        // Parse user_location into latitude and longitude
+        let user_lat, user_lon;
+        if (user_location) {
+            [user_lat, user_lon] = user_location.split(',').map(Number);
+            if (isNaN(user_lat) || isNaN(user_lon)) {
+                return res.status(400).json({ error: 'Invalid user_location parameter' });
+            }
         }
 
         // Parse store_ids into an array of integers
@@ -594,7 +604,7 @@ app.get('/shopping-results', async (req, res) => {
                             include: {
                                 product_store: {
                                     include: {
-                                        stores: true
+                                        stores: true // Include store details
                                     }
                                 }
                             }
@@ -618,8 +628,9 @@ app.get('/shopping-results', async (req, res) => {
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
                         store_address: productStore.stores.store_address,
-                        latitude: productStore.stores.latitude,
-                        longitude: productStore.stores.longitude,
+                        latitude: productStore.stores.latitude, // Latitude from stores table
+                        longitude: productStore.stores.longitude, // Longitude from stores table
+                        distance: null, // Initialize distance as null
                         store_image: productStore.stores.store_image,
                         products: [],
                         total: 0
@@ -639,12 +650,21 @@ app.get('/shopping-results', async (req, res) => {
         console.log('Store products:', store_products);
 
         // Filter by radius if provided
-        const stores_filtered_by_radius = radius ? Object.values(store_products).filter(store => {
-            const [user_lat, user_lon] = user_location.split(',').map(Number);
-            const distance = calculateDistance(user_lat, user_lon, store.latitude, store.longitude);
-            console.log(`Distance to store ${store.store_id}:`, distance); // Log distance to each store
-            return distance <= parseFloat(radius);
-        }) : Object.values(store_products);
+        const stores_filtered_by_radius = radius
+            ? await calculateDistances(user_lat, user_lon, Object.values(store_products))
+                  .then(distances => {
+                      // Map distances back to the stores
+                      distances.forEach(({ store_id, distance }) => {
+                          const store = store_products[store_id];
+                          if (store) {
+                              store.distance = `${distance.toFixed(3)} km`; // Add distance to the store object
+                          }
+                      });
+
+                      // Filter stores by radius
+                      return Object.values(store_products).filter(store => parseFloat(store.distance) <= parseFloat(radius));
+                  })
+            : Object.values(store_products);
 
         console.log('Filtered stores by radius:', stores_filtered_by_radius);
 
@@ -665,17 +685,34 @@ app.get('/shopping-results', async (req, res) => {
     }
 });
 
-// Function to calculate the distance between two coordinates using the Haversine formula
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; 
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; 
-    return distance;
+async function calculateDistances(user_lat, user_lon, stores) {
+    try {
+        // Build a UNION ALL query for the batch input
+        const unionQuery = stores
+            .map(
+                store =>
+                    `SELECT ${user_lat} AS lat1, ${user_lon} AS lon1, ${store.latitude} AS lat2, ${store.longitude} AS lon2, ${store.store_id} AS store_id`
+            )
+            .join(' UNION ALL ');
+
+        // Execute a single query to calculate distances for all stores
+        const result = await prisma.$queryRawUnsafe(`
+            SELECT
+                store_id,
+                6371 * 2 * ASIN(SQRT(
+                    POWER(SIN(RADIANS(lat2 - lat1) / 2), 2) +
+                    COS(RADIANS(lat1)) * COS(RADIANS(lat2)) *
+                    POWER(SIN(RADIANS(lon2 - lon1) / 2), 2)
+                )) AS distance
+            FROM (${unionQuery}) AS input;
+        `);
+
+        console.log('Batch distance calculation result:', result);
+        return result;
+    } catch (err) {
+        console.error('Error calculating distances:', err.message);
+        throw new Error('Failed to calculate distances');
+    }
 }
 
 // Error handling middleware
