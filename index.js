@@ -8,7 +8,7 @@ const { Storage } = require('@google-cloud/storage');
 const sharp = require('sharp'); // Add sharp for image processing
 const app = express();
 const port = process.env.PORT || 5000;
-const host = process.env.HOST || 'localhost'; // Bind to localhost
+const host = process.env.HOST || 'localhost';
 
 app.use(express.json());
 app.use(cors()); // Enable CORS for all routes
@@ -113,7 +113,7 @@ app.get('/categories', async (req, res) => {
             select: {
                 category_id: true,
                 category_name: true,
-                image_path: true // Include image_path in the response
+                image_path: true
             }
         });
 
@@ -137,7 +137,7 @@ app.get('/categories', async (req, res) => {
 // Product suggestions endpoint with multi-word search support
 app.get('/suggestions', async (req, res) => {
     try {
-        const { query } = req.query; // Get query parameter
+        const { query } = req.query;
 
         if (!query) {
             return res.status(400).json({ error: 'Query parameter is required' });
@@ -156,9 +156,9 @@ app.get('/suggestions', async (req, res) => {
                 OR: conditions
             },
             orderBy: {
-                priority: 'desc' // Sorting by priority
+                priority: 'desc'
             },
-            take: 5 // Limit results
+            take: 5
         });
 
         res.json(p_suggestions.map(suggestion => ({
@@ -249,7 +249,7 @@ app.get('/search', async (req, res) => {
         const search_conditions = [];
 
         if (query) {
-            const search_terms = query.split(/\s+/); // Split query into search terms
+            const search_terms = query.split(/\s+/);
             search_terms.forEach(term => {
                 search_conditions.push({
                     product_name: {
@@ -281,7 +281,7 @@ app.get('/search', async (req, res) => {
                 }
             },
             orderBy: {
-                created_at: 'desc' // Sorting by creation date
+                created_at: 'desc'
             }
         });
 
@@ -406,7 +406,7 @@ app.post('/cart', async (req, res) => {
                     }
                 },
                 update: {
-                    quantity: quantity // Set the quantity directly
+                    quantity: quantity
                 },
                 create: {
                     cart_id: cart.id,
@@ -568,7 +568,7 @@ app.get('/shopping-results', async (req, res) => {
         // Build the where clause for the Prisma query
         const whereClause = {
             id: parsed_cart_id,
-            user_id: user_id, // Ensure user_id is treated as a string
+            user_id: user_id,
             cart_items: {
                 some: {
                     products: {
@@ -665,14 +665,14 @@ app.get('/shopping-results', async (req, res) => {
 
 // Function to calculate the distance between two coordinates using the Haversine formula
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Radius of the Earth in kilometers
+    const R = 6371; 
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
               Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; // Distance in kilometers
+    const distance = R * c; 
     return distance;
 }
 
