@@ -63,9 +63,10 @@ model orders {
 }
 
 model pSuggestions {
-  id       Int    @id
-  name     String @db.VarChar(255)
-  priority Int
+  id          Int     @id
+  name        String  @db.VarChar(255)
+  priority    Int
+  language_id String? @db.VarChar(255)
 }
 
 model product_store {

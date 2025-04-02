@@ -134,16 +134,16 @@ app.get('/categories', async (req, res) => {
     }
 });
 
-// Product suggestions endpoint with multi-word search support
+// Product suggestions endpoint with multi-word search support and language_id filter
 app.get('/suggestions', async (req, res) => {
     try {
-        const { query } = req.query;
+        const { query, language_id = 'en-US' } = req.query;
 
         if (!query) {
             return res.status(400).json({ error: 'Query parameter is required' });
         }
 
-        const search_terms = query.split(/\s+/); // Format to split with whitespace
+        const search_terms = query.split(/\s+/);
 
         const conditions = search_terms.map(term => ({
             name: {
@@ -153,7 +153,8 @@ app.get('/suggestions', async (req, res) => {
 
         const p_suggestions = await prisma.pSuggestions.findMany({
             where: {
-                OR: conditions
+                OR: conditions,
+                language_id: language_id
             },
             orderBy: {
                 priority: 'desc'
@@ -164,7 +165,8 @@ app.get('/suggestions', async (req, res) => {
         res.json(p_suggestions.map(suggestion => ({
             id: suggestion.id,
             name: suggestion.name,
-            priority: suggestion.priority
+            priority: suggestion.priority,
+            language_id: suggestion.language_id
         })));
     } catch (err) {
         console.error('Database query error:', err.message);
@@ -175,7 +177,7 @@ app.get('/suggestions', async (req, res) => {
 // Single product endpoint to get product details by ID or query
 app.get('/product', async (req, res) => {
     try {
-        const { id, language_id = 'en-US' } = req.query; // Get id and language_id parameters or default to 'en-US'
+        const { id, language_id = 'en-US' } = req.query;
 
         if (!id) {
             return res.status(400).json({ error: 'id parameter is required' });
@@ -240,7 +242,7 @@ app.get('/product', async (req, res) => {
 // Search endpoint to search for products
 app.get('/search', async (req, res) => {
     try {
-        const { query, category_id, language_id = 'en-US' } = req.query; // Get query, category_id, and language_id parameters or default to 'en-US'
+        const { query, category_id, language_id = 'en-US' } = req.query;
 
         if (!query && !category_id) {
             return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
@@ -445,8 +447,8 @@ app.post('/cart', async (req, res) => {
         const responseData = {
             id: cart.id,
             user_id: cart.user_id,
-            min_price, // Include min_price
-            max_price, // Include max_price
+            min_price,
+            max_price,
             cart_items: cart.cart_items.map(cartItem => ({
                 id: cartItem.id,
                 cart_id: cartItem.cart_id,
@@ -547,7 +549,7 @@ app.get('/cart', async (req, res) => {
 // Shopping result endpoint (GET)
 app.get('/shopping-results', async (req, res) => {
     try {
-        const { cart_id, user_id, radius, store_ids, user_location } = req.query; // Get cart_id, user_id, radius, store_ids, and user_location from query parameters
+        const { cart_id, user_id, radius, store_ids, user_location } = req.query;
 
         if (!cart_id || !user_id) {
             return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
