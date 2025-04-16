@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors'); // Import the cors package
+const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const fs = require('fs');
@@ -17,13 +17,13 @@ const prisma = new PrismaClient();
 
 // Set up Google Cloud Storage
 const storage = new Storage();
-const bucket_name = process.env.GCLOUD_STORAGE_BUCKET; // Replace with your actual bucket name
+const bucket_name = process.env.GCLOUD_STORAGE_BUCKET;
 const bucket = storage.bucket(bucket_name);
 
 // Function to resize an image asynchronously
 async function resize_image_async(image_url, image_name) {
     try {
-        const fetch = (await import('node-fetch')).default; // Dynamically import node-fetch
+        const fetch = (await import('node-fetch')).default;
         const response = await fetch(image_url);
         if (!response.ok) {
             throw new Error(`Failed to fetch image from URL: ${image_url}`);
@@ -104,7 +104,7 @@ app.get('/', (req, res) => {
 // Categories endpoint.
 app.get('/categories', async (req, res) => {
     try {
-        const { language_id = 'en-US' } = req.query; // Get language_id parameter or default to 'en-US'
+        const { language_id = 'en-US' } = req.query;
 
         const categories = await prisma.categories.findMany({
             where: {
@@ -117,7 +117,7 @@ app.get('/categories', async (req, res) => {
             }
         });
 
-        console.log('Categories fetched:', categories); // Log the fetched categories
+        console.log('Categories fetched:', categories);
 
         if (categories.length === 0) {
             console.warn('No categories found in the database.');
@@ -604,7 +604,7 @@ app.get('/shopping-results', async (req, res) => {
                             include: {
                                 product_store: {
                                     include: {
-                                        stores: true // Include store details
+                                        stores: true
                                     }
                                 }
                             }
@@ -628,9 +628,9 @@ app.get('/shopping-results', async (req, res) => {
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
                         store_address: productStore.stores.store_address,
-                        latitude: productStore.stores.latitude, // Latitude from stores table
-                        longitude: productStore.stores.longitude, // Longitude from stores table
-                        distance: null, // Initialize distance as null
+                        latitude: productStore.stores.latitude,
+                        longitude: productStore.stores.longitude,
+                        distance: null,
                         store_image: productStore.stores.store_image,
                         products: [],
                         total: 0
@@ -655,11 +655,11 @@ app.get('/shopping-results', async (req, res) => {
                   .then(distances => {
                       // Map distances back to the stores
                       distances.forEach(({ store_id, distance }) => {
-                          const store = store_products[store_id];
-                          if (store) {
-                              store.distance = `${distance.toFixed(3)} km`; // Add distance to the store object
-                          }
-                      });
+                        const store = store_products[store_id];
+                        if (store) {
+                            store.distance = parseFloat(distance.toFixed(3));
+                        }
+                    });
 
                       // Filter stores by radius
                       return Object.values(store_products).filter(store => parseFloat(store.distance) <= parseFloat(radius));
