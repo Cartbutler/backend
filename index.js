@@ -29,10 +29,9 @@ app.use('/products', productsRoutes);
 app.use('/cart', cartRoutes);
 app.use('/shopping-results', shoppingResultsRoutes);
 
-// Error handling middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
+    console.error('Error:', err.message);
+    res.status(500).json({ error: 'Internal Server Error', details: err.message });
 });
 
 app.listen(port, host, () => {

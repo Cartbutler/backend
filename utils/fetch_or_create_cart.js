@@ -41,7 +41,17 @@ async function fetchOrCreateCart(user_id) {
         });
     }
 
-    return cart;
+    const prices = cart.cart_items.flatMap(cartItem =>
+        cartItem.products.product_store.map(ps => ps.price)
+    );
+    const min_price = Math.min(...prices);
+    const max_price = Math.max(...prices);
+
+    return {
+        ...cart,
+        min_price,
+        max_price,
+    };
 }
 
 module.exports = fetchOrCreateCart;

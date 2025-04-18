@@ -4,9 +4,10 @@ const { Storage } = require('@google-cloud/storage');
 const sharp = require('sharp');
 
 const storage = new Storage();
-const bucket = storage.bucket(process.env.GCLOUD_STORAGE_BUCKET);
+const bucket_name = process.env.GCLOUD_STORAGE_BUCKET;
+const bucket = storage.bucket(bucket_name);
 
-async function resizeImageAsync(image_url, image_name) {
+async function resize_image_async(image_url, image_name) {
     try {
         const fetch = (await import('node-fetch')).default;
         const response = await fetch(image_url);
@@ -15,11 +16,13 @@ async function resizeImageAsync(image_url, image_name) {
         }
         const buffer = await response.buffer();
 
-        const resized_buffer = await sharp(buffer).resize(160, 160).toBuffer();
+        const resized_buffer = await sharp(buffer)
+            .resize(160, 160)
+            .toBuffer();
+
         const resized_image_name = `160x160-${image_name}`;
         const resized_image_blob = bucket.file(resized_image_name);
 
-        // Check if the resized image already exists
         const [exists] = await resized_image_blob.exists();
         if (!exists) {
             await resized_image_blob.save(resized_buffer);
@@ -29,4 +32,4 @@ async function resizeImageAsync(image_url, image_name) {
     }
 }
 
-module.exports = resizeImageAsync;
+module.exports = resize_image_async;
