@@ -25,7 +25,7 @@ const cartRoutes = require('./endpoints/cart');
 const shoppingResultsRoutes = require('./endpoints/shopping_results');
 
 app.use('/categories', categoriesRoutes);
-app.use('/products', productsRoutes);
+app.use('/', productsRoutes);
 app.use('/cart', cartRoutes);
 app.use('/shopping-results', shoppingResultsRoutes);
 

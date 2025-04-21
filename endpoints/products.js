@@ -45,48 +45,53 @@ router.get('/suggestions', async (req, res) => {
     }
 });
 
-// Search endpoint
+// Search endpoint to search for products
 router.get('/search', async (req, res) => {
     try {
-        const { query, categoryId, language_id = 'en-US' } = req.query;
+        const { query, category_id, language_id = 'en-US' } = req.query; // Use snake_case for category_id
 
-        if (!query && !categoryId) {
-            return res.status(400).json({ error: 'At least one of query or categoryId parameter is required' });
+        if (!query && !category_id) {
+            return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
         }
 
         const search_conditions = [];
+
         if (query) {
             const search_terms = query.split(/\s+/);
             search_terms.forEach(term => {
                 search_conditions.push({
-                    product_name: { contains: term.toLowerCase() },
+                    product_name: {
+                        contains: term.toLowerCase()
+                    }
                 });
             });
         }
 
-        if (categoryId) {
-            search_conditions.push({ category_id: parseInt(categoryId, 10) });
+        if (category_id) {
+            search_conditions.push({
+                category_id: parseInt(category_id, 10) // Use category_id directly
+            });
         }
 
         const products = await prisma.products.findMany({
-            where: { OR: search_conditions, language_id },
+            where: {
+                OR: search_conditions,
+                language_id: language_id
+            },
             select: {
                 product_id: true,
                 product_name: true,
                 image_path: true,
-                product_store: { select: { price: true } },
+                product_store: {
+                    select: {
+                        price: true
+                    }
+                }
             },
-            orderBy: { created_at: 'desc' },
-        });
-
-        for (const product of products) {
-            const image_name = path.basename(product.image_path);
-            try {
-                await resizeImage(product.image_path, image_name);
-            } catch (err) {
-                console.error(`Error resizing image for product ${product.product_id}:`, err.message);
+            orderBy: {
+                created_at: 'desc'
             }
-        }
+        });
 
         const productsWithPrices = products.map(product => {
             const prices = product.product_store.map(ps => ps.price);
@@ -98,7 +103,7 @@ router.get('/search', async (req, res) => {
                 product_name: product.product_name,
                 image_path: product.image_path,
                 min_price,
-                max_price,
+                max_price
             };
         });
 
@@ -108,7 +113,6 @@ router.get('/search', async (req, res) => {
         res.status(500).json({ error: 'Database query error', details: err.message });
     }
 });
-
 router.get('/product', async (req, res) => {
     try {
         const { id, language_id = 'en-US' } = req.query;

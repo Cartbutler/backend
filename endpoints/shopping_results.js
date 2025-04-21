@@ -7,10 +7,14 @@ const prisma = new PrismaClient();
 // Shopping results endpoint
 router.get('/', async (req, res) => {
     try {
-        const { cart_id, user_id, radius, user_location } = req.query;
+        const { cart_id, user_id, radius, store_ids, user_location } = req.query;
 
         if (!cart_id || !user_id) {
             return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
+        }
+
+        if (radius && !user_location) {
+            return res.status(400).json({ error: 'user_location parameter is required when radius is provided' });
         }
 
         const parsed_cart_id = parseInt(cart_id, 10);
@@ -18,9 +22,8 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid cart_id parameter' });
         }
 
-        // Parse latitude and longitude if provided
-        let user_lat = null;
-        let user_lon = null;
+        // Parse user_location into latitude and longitude
+        let user_lat, user_lon;
         if (user_location) {
             [user_lat, user_lon] = user_location.split(',').map(Number);
             if (isNaN(user_lat) || isNaN(user_lon)) {
@@ -28,9 +31,29 @@ router.get('/', async (req, res) => {
             }
         }
 
+        // Parse store_ids into an array of integers
+        const storeIdsArray = store_ids ? store_ids.split(',').map(id => parseInt(id, 10)) : [];
+
+        // Build the where clause for the Prisma query
+        const whereClause = {
+            id: parsed_cart_id,
+            user_id: user_id,
+            cart_items: {
+                some: {
+                    products: {
+                        product_store: {
+                            some: {
+                                stores: storeIdsArray.length > 0 ? { store_id: { in: storeIdsArray } } : {}
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
         // Fetch the cart with cart items for the user
         const cart = await prisma.cart.findFirst({
-            where: { id: parsed_cart_id, user_id },
+            where: whereClause,
             include: {
                 cart_items: {
                     include: {
@@ -38,21 +61,21 @@ router.get('/', async (req, res) => {
                             include: {
                                 product_store: {
                                     include: {
-                                        stores: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
+                                        stores: true // Include store details
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         if (!cart) {
             return res.status(404).json({ error: 'Cart not found or does not belong to the user' });
         }
 
-        // Aggregate store products
+        // Group products by store
         const store_products = cart.cart_items.reduce((acc, cartItem) => {
             cartItem.products.product_store.forEach(productStore => {
                 const store_id = productStore.store_id;
@@ -62,61 +85,57 @@ router.get('/', async (req, res) => {
                         store_name: productStore.stores.store_name,
                         store_location: productStore.stores.store_location,
                         store_address: productStore.stores.store_address,
+                        latitude: productStore.stores.latitude, // Latitude from stores table
+                        longitude: productStore.stores.longitude, // Longitude from stores table
+                        distance: null, // Initialize distance as null
                         store_image: productStore.stores.store_image,
-                        latitude: productStore.stores.latitude,
-                        longitude: productStore.stores.longitude,
                         products: [],
-                        total: 0,
+                        total: 0
                     };
                 }
                 acc[store_id].products.push({
                     product_id: cartItem.product_id,
+                    product_name: cartItem.products.product_name,
                     price: productStore.price,
-                    quantity: cartItem.quantity,
+                    quantity: cartItem.quantity
                 });
                 acc[store_id].total += productStore.price * cartItem.quantity;
             });
             return acc;
         }, {});
 
-        // If user_location is provided, calculate distances
-        if (user_lat !== null && user_lon !== null) {
-            const distances = await calculateDistances(user_lat, user_lon, Object.values(store_products));
-            distances.forEach(({ store_id, distance }) => {
-                if (store_products[store_id]) {
-                    store_products[store_id].distance = parseFloat(distance.toFixed(3));
-                }
-            });
+        console.log('Store products:', store_products);
 
-            // Filter stores by radius if provided
-            if (radius) {
-                const parsed_radius = parseFloat(radius);
-                if (isNaN(parsed_radius)) {
-                    return res.status(400).json({ error: 'Invalid radius parameter' });
-                }
-                Object.values(store_products).forEach(store => {
-                    if (store.distance > parsed_radius) {
-                        delete store_products[store.store_id];
-                    }
-                });
-            }
-        }
+        // Filter by radius if provided
+        const stores_filtered_by_radius = radius
+            ? await calculateDistances(user_lat, user_lon, Object.values(store_products))
+                  .then(distances => {
+                      // Map distances back to the stores
+                      distances.forEach(({ store_id, distance }) => {
+                          const store = store_products[store_id];
+                          if (store) {
+                              store.distance = `${distance.toFixed(3)} km`; // Add distance to the store object
+                          }
+                      });
 
-        // Return all stores if user_location is not provided
-        const result = Object.values(store_products).map(store => ({
-            store_id: store.store_id,
-            store_name: store.store_name,
-            store_location: store.store_location,
-            store_address: store.store_address,
-            store_image: store.store_image,
-            latitude: store.latitude,
-            longitude: store.longitude,
-            distance: store.distance || null,
-            total: store.total,
-            products: store.products,
-        }));
+                      // Filter stores by radius
+                      return Object.values(store_products).filter(store => parseFloat(store.distance) <= parseFloat(radius));
+                  })
+            : Object.values(store_products);
 
-        res.json(result);
+        console.log('Filtered stores by radius:', stores_filtered_by_radius);
+
+        // Filter out stores with zero products
+        const non_empty_stores = stores_filtered_by_radius.filter(store => store.products.length > 0);
+
+        console.log('Non-empty stores:', non_empty_stores);
+
+        // Sort the filtered stores by total price
+        const sorted_stores = non_empty_stores.sort((a, b) => a.total - b.total);
+
+        console.log('Sorted stores:', sorted_stores);
+
+        res.json(sorted_stores);
     } catch (err) {
         console.error('Error fetching shopping results:', err.message);
         res.status(500).json({ error: 'Error fetching shopping results', details: err.message });
