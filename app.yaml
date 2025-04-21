@@ -1,0 +1,8 @@
+runtime: nodejs20
+
+env_variables:
+  DB_HOST: '104.197.180.231'
+  DB_USER: 'cartbutler'
+  DB_PASSWORD: 'conestoga8946'
+  DB_NAME: 'cartbutler8946'
+  DATABASE_URL: 'mysql://cartbutler8946:conestoga8946@104.197.180.231:3306/cartbutler'

@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model cart {
+  id         Int          @id @default(autoincrement())
+  user_id    String       @db.VarChar(36)
+  quantity   Int          @default(0)
+  cart_items cart_items[]
+
+  @@index([user_id], map: "user_id")
+}
+
+model categories {
+  category_id   Int        @id @default(autoincrement())
+  category_name String     @unique @db.VarChar(255)
+  image_path    String     @db.VarChar(255)
+  language_id   String?    @db.VarChar(255)
+  products      products[]
+}
+
+model customers {
+  customers_id Int       @id
+  first_name   String?   @db.VarChar(255)
+  last_name    String?   @db.VarChar(255)
+  email        String?   @unique @db.VarChar(255)
+  phone_number String?   @db.VarChar(255)
+  address      String?   @db.VarChar(255)
+  premium_rank Int?
+  date_joined  DateTime? @db.DateTime(0)
+  orders       orders[]
+}
+
+model db_users {
+  user_id  Int     @id
+  username String? @unique @db.VarChar(255)
+  password String? @db.VarChar(255)
+}
+
+model employees {
+  e_id         Int     @id
+  name         String? @db.VarChar(255)
+  first_name   String? @db.VarChar(255)
+  last_name    String? @db.VarChar(255)
+  email        String? @unique(map: "email") @db.VarChar(255)
+  phone_number String? @db.VarChar(255)
+}
+
+model orders {
+  order_id       Int        @id
+  customer_id    Int?
+  order_status   String?    @db.VarChar(255)
+  order_day      DateTime?  @db.DateTime(0)
+  payment_method String?    @db.VarChar(255)
+  customers      customers? @relation(fields: [customer_id], references: [customers_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([customer_id], map: "orders_customer_id_fkey")
+}
+
+model pSuggestions {
+  id          Int     @id
+  name        String  @db.VarChar(255)
+  priority    Int
+  language_id String? @db.VarChar(255)
+}
+
+model product_store {
+  product_store_id Int      @id
+  product_id       Int
+  store_id         Int
+  price            Float    @db.Float
+  stock            Int
+  products         products @relation(fields: [product_id], references: [product_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_product_store_product_id")
+  stores           stores   @relation(fields: [store_id], references: [store_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_product_store_store_id")
+
+  @@index([product_id], map: "fk_product_store_product_id")
+  @@index([store_id], map: "idx_product_store_store_id")
+}
+
+model products {
+  product_id    Int             @id
+  product_name  String          @db.VarChar(255)
+  description   String          @db.Text
+  price         Float           @db.Float
+  stock         Int
+  category_id   Int
+  image_path    String          @db.VarChar(255)
+  created_at    DateTime        @default(now()) @db.DateTime(0)
+  category_name String          @db.VarChar(255)
+  language_id   String?         @db.VarChar(255)
+  cart_items    cart_items[]
+  product_store product_store[]
+  categories    categories      @relation(fields: [category_id], references: [category_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([category_id], map: "products_category_id_fkey")
+}
+
+model stores {
+  store_id       Int             @id @default(autoincrement())
+  store_name     String          @db.VarChar(255)
+  store_location String          @db.VarChar(255)
+  store_address  String?         @db.VarChar(255)
+  store_image    String?         @db.VarChar(255)
+  longitude      Decimal         @db.Decimal(9, 6)
+  latitude       Decimal         @db.Decimal(9, 6)
+  product_store  product_store[]
+}
+
+model users {
+  user_id String @id @db.VarChar(36)
+}
+
+model cart_items {
+  id         Int      @id @default(autoincrement())
+  cart_id    Int
+  product_id Int
+  quantity   Int
+  cart       cart     @relation(fields: [cart_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "cart_items_ibfk_1")
+  products   products @relation(fields: [product_id], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cartItems_product_store")
+
+  @@unique([cart_id, product_id], map: "cartId_productId")
+  @@index([product_id], map: "productId")
+}
