@@ -1,14 +1,25 @@
 // This function is available in the backend but not being used in the frontend currently, it shall be updated in the future.
 
-const { Storage } = require('@google-cloud/storage');
 const sharp = require('sharp');
 
-const storage = new Storage();
+let storage, bucket;
 const bucket_name = process.env.GCLOUD_STORAGE_BUCKET;
-const bucket = storage.bucket(bucket_name);
+
+// Only initialize Google Cloud Storage if bucket name is provided
+if (bucket_name) {
+    const { Storage } = require('@google-cloud/storage');
+    storage = new Storage();
+    bucket = storage.bucket(bucket_name);
+}
 
 async function resize_image_async(image_url, image_name) {
     try {
+        // Skip image processing if Google Cloud Storage is not configured
+        if (!bucket_name || !bucket) {
+            console.log('Google Cloud Storage not configured, skipping image resize');
+            return;
+        }
+
         const fetch = (await import('node-fetch')).default;
         const response = await fetch(image_url);
         if (!response.ok) {
