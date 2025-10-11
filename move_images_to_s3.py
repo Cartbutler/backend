@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 import pymysql
 import sys
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import NoCredentialsError, ClientError
+import shutil
 
 # Load environment variables from .env file
 load_dotenv()
@@ -52,22 +53,40 @@ def connect_to_database(connection_params):
         print(f"✗ Failed to connect to database: {e}")
         sys.exit(1)
 
-def get_s3_client():
+def initialize_s3_client():
     """
-    Create and return S3 client
+    Initialize AWS S3 client
     """
     try:
+        # Get AWS credentials from environment
+        aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        aws_region = os.getenv('AWS_REGION', 'us-east-1')
+        
+        if not aws_access_key or not aws_secret_key:
+            print("⚠ AWS credentials not found in .env file")
+            return None, None
+        
+        # Get bucket name
+        bucket_name = os.getenv('S3_BUCKET_NAME')
+        if not bucket_name:
+            print("⚠ S3_BUCKET_NAME not found in .env file")
+            return None, None
+        
+        # Initialize S3 client
         s3_client = boto3.client(
             's3',
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-            region_name=os.getenv('AWS_REGION', 'us-east-1')
+            aws_access_key_id=aws_access_key,
+            aws_secret_access_key=aws_secret_key,
+            region_name=aws_region
         )
-        print(f"✓ Connected to AWS S3")
-        return s3_client
+        
+        print(f"✓ Connected to AWS S3 (Region: {aws_region}, Bucket: {bucket_name})")
+        return s3_client, bucket_name
+        
     except Exception as e:
-        print(f"✗ Failed to create S3 client: {e}")
-        sys.exit(1)
+        print(f"⚠ Failed to initialize S3 client: {e}")
+        return None, None
 
 def fetch_image_paths(connection):
     """
@@ -117,50 +136,44 @@ def download_image(url, save_path):
             os.remove(save_path)
         return False
 
-def upload_to_s3(s3_client, file_path, bucket_name, s3_key):
+def upload_to_s3(s3_client, bucket_name, local_path, s3_key):
     """
-    Upload a file to S3 bucket
+    Upload a file to S3
     """
     try:
-        # Determine content type based on file extension
-        content_type_map = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp',
-            '.svg': 'image/svg+xml'
-        }
-        
-        file_extension = Path(file_path).suffix.lower()
-        content_type = content_type_map.get(file_extension, 'application/octet-stream')
-        
         # Upload file
         s3_client.upload_file(
-            str(file_path),
+            local_path,
             bucket_name,
             s3_key,
-            ExtraArgs={
-                'ContentType': content_type,
-                'ACL': 'public-read'  # Make images publicly accessible
-            }
+            ExtraArgs={'ContentType': 'image/jpeg'}  # Adjust based on file type
         )
         
-        # Generate S3 URL
-        s3_url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+        # Construct S3 URL
+        aws_region = os.getenv('AWS_REGION', 'us-east-1')
+        if aws_region == 'us-east-1':
+            s3_url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+        else:
+            s3_url = f"https://{bucket_name}.s3.{aws_region}.amazonaws.com/{s3_key}"
         
-        return s3_url
+        return True, s3_url
         
+    except FileNotFoundError:
+        print(f"  ✗ File not found: {local_path}")
+        return False, None
+    except NoCredentialsError:
+        print(f"  ✗ AWS credentials not available")
+        return False, None
     except ClientError as e:
         print(f"  ✗ S3 upload error: {e}")
-        return None
+        return False, None
     except Exception as e:
-        print(f"  ✗ Unexpected error: {e}")
-        return None
+        print(f"  ✗ Unexpected error during S3 upload: {e}")
+        return False, None
 
-def update_database_with_s3_url(connection, old_image_path, new_s3_url):
+def update_database_image_path(connection, old_path, new_path):
     """
-    Update all products with the old image_path to use the new S3 URL
+    Update all products with the old image path to use the new S3 path
     """
     try:
         with connection.cursor() as cursor:
@@ -169,10 +182,10 @@ def update_database_with_s3_url(connection, old_image_path, new_s3_url):
                 SET image_path = %s 
                 WHERE image_path = %s
             """
-            cursor.execute(query, (new_s3_url, old_image_path))
+            cursor.execute(query, (new_path, old_path))
+            affected_rows = cursor.rowcount
             connection.commit()
-            rows_affected = cursor.rowcount
-            return rows_affected
+            return affected_rows
     except pymysql.Error as e:
         print(f"  ✗ Database update error: {e}")
         connection.rollback()
@@ -185,6 +198,19 @@ def create_download_directory():
     download_dir = Path("images")
     download_dir.mkdir(exist_ok=True)
     return download_dir
+
+def cleanup_download_directory(download_dir):
+    """
+    Delete the download directory and all its contents
+    """
+    try:
+        if download_dir.exists():
+            shutil.rmtree(download_dir)
+            print(f"✓ Cleaned up local directory: {download_dir}")
+            return True
+    except Exception as e:
+        print(f"⚠ Failed to cleanup directory: {e}")
+        return False
 
 def get_unique_filename(download_dir, filename):
     """
@@ -212,27 +238,16 @@ def get_unique_filename(download_dir, filename):
 
 def main():
     """
-    Main function to orchestrate the image download and upload process
+    Main function to orchestrate the image download and S3 upload process
     """
     print("=" * 50)
-    print("Product Image Migrator to S3")
+    print("Product Image Downloader & S3 Uploader")
     print("=" * 50)
     
-    # Get environment variables
+    # Get DATABASE_URL from environment
     database_url = os.getenv('DATABASE_URL')
-    s3_bucket = os.getenv('S3_BUCKET_NAME')
-    s3_folder = os.getenv('S3_FOLDER', 'products')  # Optional folder prefix in S3
-    
     if not database_url:
         print("✗ DATABASE_URL not found in .env file")
-        sys.exit(1)
-    
-    if not s3_bucket:
-        print("✗ S3_BUCKET_NAME not found in .env file")
-        sys.exit(1)
-    
-    if not os.getenv('AWS_ACCESS_KEY_ID') or not os.getenv('AWS_SECRET_ACCESS_KEY'):
-        print("✗ AWS credentials not found in .env file")
         sys.exit(1)
     
     # Parse database connection parameters
@@ -241,30 +256,39 @@ def main():
     # Connect to database
     connection = connect_to_database(connection_params)
     
-    # Connect to S3
-    s3_client = get_s3_client()
+    # Initialize S3 client
+    s3_client, bucket_name = initialize_s3_client()
+    upload_to_s3_enabled = s3_client is not None
+    
+    if not upload_to_s3_enabled:
+        print("⚠ S3 upload disabled - files will only be downloaded locally")
+    
+    download_dir = None
     
     try:
         # Fetch unique image paths
         images = fetch_image_paths(connection)
         
         if not images:
-            print("No images to process")
+            print("No images to download")
             return
         
         # Create download directory
         download_dir = create_download_directory()
         print(f"✓ Using download directory: {download_dir.absolute()}")
-        print(f"✓ S3 Bucket: {s3_bucket}")
-        print(f"✓ S3 Folder: {s3_folder}")
         
-        # Process images
+        # S3 folder prefix (optional)
+        s3_folder = os.getenv('S3_FOLDER_PREFIX', 'products')
+        
+        # Download and upload images
         print(f"\nProcessing {len(images)} images...")
         print("-" * 50)
         
-        successful_uploads = 0
+        successful_downloads = 0
         failed_downloads = 0
+        successful_uploads = 0
         failed_uploads = 0
+        database_updates = 0
         
         for idx, image in enumerate(images, 1):
             image_path = image['image_path']
@@ -290,43 +314,61 @@ def main():
                 print(f"  ⚠ Filename conflict resolved: {unique_filename}")
             
             # Download the image
-            if not download_image(image_path, save_path):
-                failed_downloads += 1
-                continue
-            
-            print(f"  ✓ Downloaded: {unique_filename}")
-            
-            # Upload to S3
-            s3_key = f"{s3_folder}/{unique_filename}" if s3_folder else unique_filename
-            s3_url = upload_to_s3(s3_client, save_path, s3_bucket, s3_key)
-            
-            if not s3_url:
-                failed_uploads += 1
-                continue
-            
-            print(f"  ✓ Uploaded to S3: {s3_url}")
-            
-            # Update database
-            rows_updated = update_database_with_s3_url(connection, image_path, s3_url)
-            
-            if rows_updated > 0:
-                print(f"  ✓ Updated {rows_updated} product(s) in database")
-                successful_uploads += 1
+            if download_image(image_path, save_path):
+                print(f"  ✓ Downloaded: {unique_filename}")
+                successful_downloads += 1
+                
+                # Upload to S3 if enabled
+                if upload_to_s3_enabled:
+                    s3_key = f"{s3_folder}/{unique_filename}"
+                    print(f"  → Uploading to S3: {s3_key}")
+                    
+                    success, s3_url = upload_to_s3(s3_client, bucket_name, str(save_path), s3_key)
+                    
+                    if success:
+                        print(f"  ✓ Uploaded to S3: {s3_url}")
+                        successful_uploads += 1
+                        
+                        # Update database with new S3 URL
+                        print(f"  → Updating database...")
+                        updated_rows = update_database_image_path(connection, image_path, s3_url)
+                        
+                        if updated_rows > 0:
+                            print(f"  ✓ Updated {updated_rows} product(s) in database")
+                            database_updates += updated_rows
+                        else:
+                            print(f"  ⚠ No database rows updated")
+                    else:
+                        failed_uploads += 1
+                
             else:
-                print(f"  ⚠ Warning: No products updated")
+                failed_downloads += 1
         
         # Print summary
         print("\n" + "=" * 50)
-        print("Migration Summary")
+        print("Summary")
         print("=" * 50)
-        print(f"✓ Successful uploads: {successful_uploads}")
+        print(f"✓ Successful downloads: {successful_downloads}")
         print(f"✗ Failed downloads: {failed_downloads}")
-        print(f"✗ Failed uploads: {failed_uploads}")
-        print(f"📁 Local images saved to: {download_dir.absolute()}")
-        print(f"☁️  S3 Bucket: {s3_bucket}")
+        
+        if upload_to_s3_enabled:
+            print(f"✓ Successful S3 uploads: {successful_uploads}")
+            print(f"✗ Failed S3 uploads: {failed_uploads}")
+            print(f"✓ Database rows updated: {database_updates}")
+        
+        print(f"📁 Images saved to: {download_dir.absolute()}")
+        
+        # Cleanup local files if S3 upload was enabled
+        if upload_to_s3_enabled and download_dir:
+            print("\n" + "=" * 50)
+            print("Cleanup")
+            print("=" * 50)
+            cleanup_download_directory(download_dir)
         
     except Exception as e:
-        print(f"\n✗ Error during migration process: {e}")
+        print(f"\n✗ Error during process: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         # Close database connection
         connection.close()
@@ -336,5 +378,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n✗ Migration interrupted by user")
+        print("\n\n✗ Process interrupted by user")
         sys.exit(1)
