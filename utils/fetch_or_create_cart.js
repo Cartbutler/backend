@@ -44,8 +44,8 @@ async function fetchOrCreateCart(user_id) {
     const prices = cart.cart_items.flatMap(cartItem =>
         cartItem.products.product_store.map(ps => ps.price)
     );
-    const min_price = Math.min(...prices);
-    const max_price = Math.max(...prices);
+    const min_price = prices.length ? Math.min(...prices) : 0;
+    const max_price = prices.length ? Math.max(...prices) : 0;
 
     return {
         ...cart,
