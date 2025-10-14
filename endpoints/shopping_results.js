@@ -34,32 +34,20 @@ router.get('/', async (req, res) => {
         // Parse store_ids into an array of integers
         const storeIdsArray = store_ids ? store_ids.split(',').map(id => parseInt(id, 10)) : [];
 
-        // Build the where clause for the Prisma query
-        const whereClause = {
-            id: parsed_cart_id,
-            user_id: user_id,
-            cart_items: {
-                some: {
-                    products: {
-                        product_store: {
-                            some: {
-                                stores: storeIdsArray.length > 0 ? { store_id: { in: storeIdsArray } } : {}
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
         // Fetch the cart with cart items for the user
         const cart = await prisma.cart.findFirst({
-            where: whereClause,
+            where: {
+                id: parsed_cart_id,
+                user_id: user_id,
+            },
             include: {
                 cart_items: {
                     include: {
                         products: {
                             include: {
                                 product_store: {
+                                    // Add filtering here to only include product_store entries for selected stores
+                                    where: storeIdsArray.length > 0 ? { store_id: { in: storeIdsArray } } : {},
                                     include: {
                                         stores: true // Include store details
                                     }
