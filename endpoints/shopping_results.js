@@ -61,7 +61,8 @@ router.get('/', async (req, res) => {
             distance: (user_lat && user_lon) ? calculateDistance(user_lat, user_lon, store.latitude, store.longitude) : null,
             store_image: store.store_image,
             products: store.products,
-            total: store.total
+            total: store.total,
+            is_complete: store.is_complete
         }));
 
         // Filter by radius if provided

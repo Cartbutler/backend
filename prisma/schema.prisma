@@ -128,15 +128,18 @@ model cart_items {
 }
 
 view cart_store_complete {
-  cart_id        Int
-  user_id        String  @db.VarChar(36)
-  store_id       Int
-  store_name     String  @db.VarChar(255)
-  store_location String  @db.VarChar(255)
-  store_address  String? @db.VarChar(255)
-  latitude       Decimal @db.Decimal(9, 6)
-  longitude      Decimal @db.Decimal(9, 6)
-  store_image    String? @db.VarChar(255)
-  total          Float   @db.Float
-  products       Json    // Products as JSON array
+  cart_id              Int
+  user_id              String  @db.VarChar(36)
+  store_id             Int
+  store_name           String  @db.VarChar(255)
+  store_location       String  @db.VarChar(255)
+  store_address        String? @db.VarChar(255)
+  latitude             Decimal @db.Decimal(9, 6)
+  longitude            Decimal @db.Decimal(9, 6)
+  store_image          String? @db.VarChar(255)
+  total                Float   @db.Float
+  products             Json    // Products as JSON array
+  product_count        Int     // Number of products from cart available in this store
+  total_cart_products  Int     // Total number of products in the cart
+  is_complete          Boolean // True if store has all cart products
 }
