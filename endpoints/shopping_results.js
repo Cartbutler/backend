@@ -40,9 +40,6 @@ router.get('/', async (req, res) => {
                 cart_id: parsed_cart_id,
                 user_id: user_id,
                 ...(storeIdsArray.length > 0 && { store_id: { in: storeIdsArray } })
-            },
-            orderBy: {
-                total: 'asc'
             }
         });
 
