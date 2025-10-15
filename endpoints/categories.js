@@ -7,11 +7,6 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
     try {
         let { language_id } = req.query;
-        
-        // Normalize English variants to en-US
-        if (!language_id || language_id.toLowerCase().startsWith('en')) {
-            language_id = 'en-US';
-        }
 
         const categories = await prisma.categories.findMany({
             where: { language_id },

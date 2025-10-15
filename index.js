@@ -6,9 +6,10 @@ const port = process.env.PORT || 5000;
 const host = process.env.HOST || 'localhost';
 
 // Import utility functions
-const resizeImageAsync = require('./utils/resize_image');
-const fetchOrCreateCart = require('./utils/fetch_or_create_cart');
-const calculateDistances = require('./utils/calculate_distances');
+const normalizeLanguage = require('./utils/normalizeLanguage');
+
+// Apply normalized language to ALL routes in the app
+app.use(normalizeLanguage);
 
 app.use(express.json());
 app.use(cors());
