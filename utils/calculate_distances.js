@@ -1,34 +1,15 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-
-async function calculateDistances(user_lat, user_lon, stores) {
-    try {
-        // Build a UNION ALL query for the batch input
-        const unionQuery = stores
-            .map(
-                store =>
-                    `SELECT ${user_lat} AS lat1, ${user_lon} AS lon1, ${store.latitude} AS lat2, ${store.longitude} AS lon2, ${store.store_id} AS store_id`
-            )
-            .join(' UNION ALL ');
-
-        // Execute a single query to calculate distances for all stores
-        const result = await prisma.$queryRawUnsafe(`
-            SELECT
-                store_id,
-                6371 * 2 * ASIN(SQRT(
-                    POWER(SIN(RADIANS(lat2 - lat1) / 2), 2) +
-                    COS(RADIANS(lat1)) * COS(RADIANS(lat2)) *
-                    POWER(SIN(RADIANS(lon2 - lon1) / 2), 2)
-                )) AS distance
-            FROM (${unionQuery}) AS input;
-        `);
-
-        console.log('Batch distance calculation result:', result);
-        return result;
-    } catch (err) {
-        console.error('Error calculating distances:', err.message);
-        throw new Error('Failed to calculate distances');
-    }
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c;
+    
+    return distance; // Returns distance in kilometers
 }
 
-module.exports = calculateDistances;
+module.exports = calculateDistance;

@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["views"]
 }
 
 datasource db {
@@ -124,4 +125,18 @@ model cart_items {
 
   @@unique([cart_id, product_id], map: "cartId_productId")
   @@index([product_id], map: "productId")
+}
+
+view cart_store_complete {
+  cart_id        Int
+  user_id        String  @db.VarChar(36)
+  store_id       Int
+  store_name     String  @db.VarChar(255)
+  store_location String  @db.VarChar(255)
+  store_address  String? @db.VarChar(255)
+  latitude       Decimal @db.Decimal(9, 6)
+  longitude      Decimal @db.Decimal(9, 6)
+  store_image    String? @db.VarChar(255)
+  total          Float   @db.Float
+  products       Json    // Products as JSON array
 }
