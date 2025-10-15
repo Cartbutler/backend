@@ -8,7 +8,7 @@ const resizeImage = require('../utils/resize_image');
 // Product suggestions endpoint
 router.get('/suggestions', async (req, res) => {
     try {
-        const { query, language_id = 'en-US' } = req.query;
+        const { query, language_id } = req.query;
 
         if (!query) {
             return res.status(400).json({ error: 'Query parameter is required' });
@@ -48,7 +48,7 @@ router.get('/suggestions', async (req, res) => {
 // Search endpoint to search for products
 router.get('/search', async (req, res) => {
     try {
-        const { query, category_id, language_id = 'en-US' } = req.query; // Use snake_case for category_id
+        const { query, category_id, language_id } = req.query; // Use snake_case for category_id
 
         if (!query && !category_id) {
             return res.status(400).json({ error: 'At least one of query or category_id parameter is required' });
@@ -115,7 +115,7 @@ router.get('/search', async (req, res) => {
 });
 router.get('/product', async (req, res) => {
     try {
-        const { id, language_id = 'en-US' } = req.query;
+        const { id, language_id } = req.query;
 
         if (!id) {
             return res.status(400).json({ error: 'id parameter is required' });
