@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
             store_image: store.store_image,
             products: store.products,
             total: store.total,
-            is_complete: store.is_complete
+            is_complete: store.is_complete === 1
         }));
 
         // Filter by radius if provided
