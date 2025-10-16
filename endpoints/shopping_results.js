@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 // Shopping results endpoint
 router.get('/', async (req, res) => {
     try {
-        const { cart_id, user_id, radius, store_ids, user_location } = req.query;
+        const { cart_id, user_id, radius, store_ids, user_location, complete_only } = req.query;
 
         if (!cart_id || !user_id) {
             return res.status(400).json({ error: 'cart_id and user_id parameters are required' });
@@ -34,12 +34,16 @@ router.get('/', async (req, res) => {
         // Parse store_ids into an array of integers
         const storeIdsArray = store_ids ? store_ids.split(',').map(id => parseInt(id, 10)) : [];
 
+        // Parse complete_only as boolean
+        const completeOnly = complete_only === 'true' || complete_only === '1';
+
         // Get the stores for the cart
         const stores = await prisma.cart_store_complete.findMany({
             where: {
                 cart_id: parsed_cart_id,
                 user_id: user_id,
-                ...(storeIdsArray.length > 0 && { store_id: { in: storeIdsArray } })
+                ...(storeIdsArray.length > 0 && { store_id: { in: storeIdsArray } }),
+                ...(completeOnly && { is_complete: 1 })
             }
         });
 
