@@ -30,3 +30,6 @@ node_modules/.package-lock.json
 
 # Git attributes
 .gitattributes
+
+# Prisma generated files
+prisma/views
