@@ -158,7 +158,7 @@ async function updateCartItem(cart_id, product_id, quantity, tx) {
         // Add or update the product in the cart
         await tx.cart_items.upsert({
             where: {
-                cartId_productId: {
+                cart_id_product_id: {
                     cart_id: cart_id,
                     product_id: product_id
                 }
