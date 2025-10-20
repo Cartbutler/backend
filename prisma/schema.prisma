@@ -12,6 +12,8 @@ model cart {
   id         Int          @id @default(autoincrement())
   user_id    String       @db.VarChar(36)
   quantity   Int          @default(0)
+  created_at DateTime     @default(now()) @db.DateTime(0)
+  updated_at DateTime     @updatedAt @db.DateTime(0)
   cart_items cart_items[]
 
   @@index([user_id], map: "user_id")
