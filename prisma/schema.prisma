@@ -144,4 +144,6 @@ view cart_store_complete {
   product_count        Int     // Number of products from cart available in this store
   total_cart_products  Int     // Total number of products in the cart
   is_complete          Boolean // True if store has all cart products
+
+  @@id([cart_id, store_id])
 }
